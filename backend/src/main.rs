@@ -347,7 +347,15 @@ fn scanner_loop(state: AppState, stop: Arc<AtomicBool>) {
 fn side_loop(state: AppState, stop: Arc<AtomicBool>) {
     let mut next_pss = Instant::now();
     let mut next_cdp = Instant::now();
+    let mut last_receivers = state.tx.receiver_count();
     while !stop.load(Ordering::Relaxed) {
+        let receivers = state.tx.receiver_count();
+        if receivers > 0 && last_receivers == 0 {
+            // A dashboard just connected; take a fresh PSS sample instead of
+            // waiting for the idle backoff window.
+            next_pss = Instant::now();
+        }
+        last_receivers = receivers;
         let now = Instant::now();
         if now >= next_pss {
             let (targets, pss_interval) = {
@@ -355,7 +363,12 @@ fn side_loop(state: AppState, stop: Arc<AtomicBool>) {
                     thread::sleep(Duration::from_millis(500));
                     continue;
                 };
-                (core.pss_targets(), core.settings.pss_interval_s)
+                let interval = if state.tx.receiver_count() == 0 {
+                    core.settings.pss_interval_s.max(30.0)
+                } else {
+                    core.settings.pss_interval_s
+                };
+                (core.pss_targets(), interval)
             };
             let mut results = Vec::new();
             for (session_id, processes) in targets {

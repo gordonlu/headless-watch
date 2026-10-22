@@ -253,7 +253,7 @@ CLI values apply to the current run. Values saved from the Settings page persist
 python3 tools/benchmark.py --seconds 60
 ```
 
-It starts a private server, warms up, then reports backend CPU and RSS. On the current Ubuntu test machine it measures roughly **1.0-1.1% of one logical core** and **11-13 MiB RSS** with the default 1s scan and existing browser sessions. The PRD target is <1%; this is at the measurement noise boundary and remains an open release gate. Use `--max-cpu 1.1` to turn it into a regression gate.
+It starts a private server, warms up, then reports backend CPU and RSS. On the current Ubuntu test machine it measures **~1.0% of one logical core** and **~11.5 MiB RSS** with the default 1s scan and existing browser sessions. To keep idle overhead low, PSS sampling backs off to 30s when no dashboard is connected; with a dashboard connected it uses the configured interval (default 15s). Use `--max-cpu 1.0` to turn the benchmark into a regression gate.
 
 ## Tests
 
