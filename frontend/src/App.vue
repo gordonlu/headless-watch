@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { PageName } from "./types";
 import { fmtAgo, fmtDuration } from "./format";
 import { initStore, pendingAlerts, refreshStore, store } from "./store";
+import type { Theme } from "./store";
 import OverviewPage from "./pages/OverviewPage.vue";
 import LivePage from "./pages/LivePage.vue";
 import HistoryPage from "./pages/HistoryPage.vue";
@@ -16,8 +17,7 @@ import InspectorDrawer from "./components/InspectorDrawer.vue";
 const pages: PageName[] = ["overview", "live", "history", "alerts", "settings"];
 const page = ref<PageName>(readPage().page);
 const refreshing = ref(false);
-type Theme = "default" | "terminal";
-const theme = ref<Theme>(readTheme());
+const theme = computed(() => store.theme);
 
 const titles: Record<PageName, string> = {
   overview: "Invisible Browser Observatory",
@@ -65,7 +65,7 @@ function applyTheme(value: Theme, persist = true) {
 }
 
 function setTheme(value: Theme) {
-  theme.value = value;
+  store.theme = value;
   applyTheme(value);
 }
 
@@ -138,7 +138,8 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
-  applyTheme(theme.value, false);
+  store.theme = readTheme();
+  applyTheme(store.theme, false);
   applyHash();
   void initStore();
   window.addEventListener("hashchange", applyHash);

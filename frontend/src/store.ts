@@ -2,6 +2,8 @@ import { computed, reactive } from "vue";
 import * as api from "./api";
 import type { Overview, SessionView } from "./types";
 
+export type Theme = "default" | "terminal";
+
 export interface Toast {
   id: number;
   message: string;
@@ -15,6 +17,7 @@ export interface ConfirmRequest {
 
 export const store = reactive({
   overview: null as Overview | null,
+  theme: "default" as Theme,
   loading: true,
   connected: false,
   error: "",

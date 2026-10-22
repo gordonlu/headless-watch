@@ -7,6 +7,7 @@ import MetricCard from "../components/MetricCard.vue";
 import HistoryChart from "../components/HistoryChart.vue";
 import SessionCard from "../components/SessionCard.vue";
 import EventTimeline from "../components/EventTimeline.vue";
+import TerminalOverview from "./TerminalOverview.vue";
 
 const emit = defineEmits<{ navigate: [page: PageName] }>();
 
@@ -57,7 +58,8 @@ const memoryFoot = computed(() => {
 </script>
 
 <template>
-  <div class="page page-overview">
+  <TerminalOverview v-if="store.theme === 'terminal'" />
+  <div v-else class="page page-overview">
     <section class="kpis" aria-label="Key metrics">
       <MetricCard
         label="Active sessions"
