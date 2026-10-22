@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { SessionView } from "../types";
 import { fmtBytes, fmtCores, fmtDuration, fmtPct } from "../format";
-import { openInspector, requestConfirm } from "../store";
+import { isWindows, openInspector, requestConfirm, stopLabel } from "../store";
 import StatusBadges from "./StatusBadges.vue";
 
 const props = defineProps<{ session: SessionView }>();
@@ -18,7 +18,7 @@ const memoryNote = computed(() => {
     const coverageText = coverage ? ` · ${coverage.sampled}/${coverage.total} sampled` : "";
     return `PSS ${memory.pss_quality}${coverageText} · ${memory.pss_age_s ?? "—"}s ago`;
   }
-  return "ΣRSS upper bound · PSS not sampled yet";
+  return isWindows.value ? "Working Set upper bound · PSS unavailable" : "ΣRSS upper bound · PSS not sampled yet";
 });
 const cpuValue = computed(() =>
   props.session.cpu.cores === null ? "Calculating" : `${fmtCores(props.session.cpu.cores)} cores`,
@@ -117,7 +117,7 @@ function keydown(event: KeyboardEvent) {
         <span class="card-actions">
           <button class="ghost-btn small" type="button" @click.stop="inspect">Inspect</button>
           <button
-            v-if="session.force_available"
+            v-if="session.force_available && !isWindows"
             class="danger-btn small"
             type="button"
             @click.stop="requestConfirm(session, 'kill')"
@@ -127,7 +127,7 @@ function keydown(event: KeyboardEvent) {
             type="button"
             :disabled="!session.can_terminate"
             @click.stop="requestConfirm(session, 'term')"
-          >Stop</button>
+          >{{ stopLabel }}</button>
         </span>
       </footer>
     </div>

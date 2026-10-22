@@ -1,6 +1,6 @@
 # Architecture
 
-Headless Watch is a local observability service for headless Chromium browsers. It reads `/proc` and existing Chrome DevTools endpoints; it never restarts, patches, or attaches input to the tools that launched a browser.
+Headless Watch is a local observability service for headless Chromium browsers. It reads Linux `/proc` or native Windows process information and existing Chrome DevTools endpoints; it never restarts, patches, or attaches input to the tools that launched a browser.
 
 ## Components
 
@@ -37,10 +37,12 @@ Headless Watch is a local observability service for headless Chromium browsers. 
 - `actions.rs`: re-verification of boot ID, PID + start time, UID, and browser evidence before signaling the verified subtree.
 - `server.rs`: `/api/v1` routes, SSE snapshots, static Vue assets, CSP and request validation.
 - `core.rs`: shared state, settings, scan loop, PSS/CDP side work, audit records.
+- Windows selects a native process implementation behind the existing `procfs` interface: Toolhelp inventory, process creation FILETIME, native CPU time/working set, command lines, and current-user SID checks. PSS explicitly remains unavailable. See [Windows support](WINDOWS.md) for limits.
+- `windows_lifecycle.rs` (binary-private, Windows only): per-data-directory singleton, hidden installed monitor startup, verified identity metadata, and native-event graceful monitor shutdown. The Windows installer uses a current-user Startup shortcut rather than systemd.
 
 ## Data flow
 
-1. The scanner reads `/proc` every configured interval and builds a snapshot.
+1. The scanner reads Linux `/proc` or native Windows process APIs every configured interval and builds a snapshot.
 2. Headless browser roots are identified; each root becomes a session keyed by boot ID, PID, and start time.
 3. Per-process CPU ticks are diffed against the previous scan. New processes never import historic ticks.
 4. Source evidence is captured immediately and persisted, so it survives a launcher exit or a backend restart.
@@ -50,7 +52,7 @@ Headless Watch is a local observability service for headless Chromium browsers. 
 
 ## Storage
 
-SQLite runs in WAL mode with the database file at `0600` and the data directory at `0700`.
+SQLite runs in WAL mode. Linux uses database file permissions `0600` and data directory permissions `0700`; Windows inherits the data directory's ACLs, using LocalAppData by default.
 
 | Table | Purpose | Default retention |
 |---|---|---|

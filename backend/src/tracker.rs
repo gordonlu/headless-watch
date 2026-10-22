@@ -181,6 +181,9 @@ pub struct SummaryView {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct HealthView {
+    pub platform: &'static str,
+    pub pss_supported: bool,
+    pub graceful_stop_supported: bool,
     pub status: String,
     pub last_scan_age_s: Option<f64>,
     pub last_scan_at: Option<String>,
@@ -639,6 +642,9 @@ impl Tracker {
             "ok"
         };
         HealthView {
+            platform: std::env::consts::OS,
+            pss_supported: cfg!(target_os = "linux"),
+            graceful_stop_supported: cfg!(target_os = "linux"),
             status: status.to_string(),
             last_scan_age_s: self
                 .last_ok_instant
@@ -1282,7 +1288,9 @@ impl Session {
                 },
                 online_cpus,
             });
-        let pss_quality = if self.pss_sum.is_some() {
+        let pss_quality = if cfg!(windows) {
+            "unsupported"
+        } else if self.pss_sum.is_some() {
             if self
                 .pss_coverage
                 .as_ref()
@@ -1299,7 +1307,12 @@ impl Session {
         };
         let memory = MemoryView {
             rss_sum: self.rss_sum,
-            rss_quality: "upper_bound_estimate".to_string(),
+            rss_quality: if cfg!(windows) {
+                "working_set_upper_bound"
+            } else {
+                "upper_bound_estimate"
+            }
+            .to_string(),
             pss_sum: self.pss_sum,
             pss_quality: pss_quality.to_string(),
             pss_age_s: self

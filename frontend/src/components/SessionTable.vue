@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { SessionView } from "../types";
 import { fmtBytes, fmtCores, fmtDuration, fmtPct } from "../format";
-import { openInspector, requestConfirm } from "../store";
+import { isWindows, openInspector, requestConfirm, stopLabel } from "../store";
 import StatusBadges from "./StatusBadges.vue";
 
 const props = defineProps<{ sessions: SessionView[]; selected: string[] }>();
@@ -78,7 +78,7 @@ function keydown(event: KeyboardEvent, session: SessionView) {
           <td class="mono">{{ fmtPct(session.cpu.machine_pct) }}</td>
           <td>
             <strong class="mono">{{ fmtBytes(session.memory.pss_sum ?? session.memory.rss_sum) }}</strong>
-            <small>{{ session.memory.pss_sum !== null ? "PSS" : "RSS upper bound" }}</small>
+            <small>{{ isWindows ? "Working Set upper bound" : session.memory.pss_sum !== null ? "PSS" : "RSS upper bound" }}</small>
           </td>
           <td class="mono">{{ session.process_count }}</td>
           <td class="mono">{{ fmtDuration(session.lifetime_s) }}</td>
@@ -90,7 +90,7 @@ function keydown(event: KeyboardEvent, session: SessionView) {
               type="button"
               :disabled="!session.can_terminate"
               @click.stop="requestConfirm(session, 'term')"
-            >Stop</button>
+            >{{ stopLabel }}</button>
           </td>
         </tr>
       </tbody>

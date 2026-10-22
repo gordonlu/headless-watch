@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import type { SessionView } from "../types";
 import { fmtBytes, fmtCores, fmtDuration, fmtPct } from "../format";
-import { openInspector, requestConfirm, sessions, store } from "../store";
+import { openInspector, requestConfirm, sessions, stopLabel, store } from "../store";
 import HistoryChart from "../components/HistoryChart.vue";
 import RadarScope from "../components/RadarScope.vue";
 import EventTimeline from "../components/EventTimeline.vue";
@@ -94,7 +94,7 @@ function riskClass(session: SessionView): string {
               type="button"
               :disabled="!session.can_terminate"
               @click.stop="requestConfirm(session, 'term')"
-            >Stop</button>
+            >{{ stopLabel }}</button>
           </div>
           <div v-if="!tape.length" class="tape-empty">No headless browser signals detected.</div>
         </div>

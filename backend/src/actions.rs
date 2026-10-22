@@ -1,15 +1,26 @@
 use std::path::Path;
+#[cfg(not(windows))]
 use std::thread;
+#[cfg(not(windows))]
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
+#[cfg(not(windows))]
 use tracing::debug;
 
+#[cfg(not(windows))]
 use crate::browser::evidence_for;
+#[cfg(not(windows))]
 use crate::model::ProcessInfo;
-use crate::procfs::{descendants, live_stat, read_uid, scan, DEFAULT_PROC_ROOT};
+use crate::procfs::DEFAULT_PROC_ROOT;
+#[cfg(not(windows))]
+use crate::procfs::{descendants, live_stat, read_uid, scan};
+#[cfg(not(windows))]
 use crate::util::truncate_chars;
+#[cfg(windows)]
+pub use crate::windows_actions::terminate;
 
+#[cfg(not(windows))]
 const MAX_TARGETS: usize = 2000;
 
 #[derive(Clone, Debug)]
@@ -49,10 +60,12 @@ impl std::fmt::Display for TerminationRejected {
 
 impl std::error::Error for TerminationRejected {}
 
+#[cfg(not(windows))]
 fn current_uid() -> u32 {
     unsafe { libc::geteuid() }
 }
 
+#[cfg(not(windows))]
 fn signal_process(pid: u32, signal: i32) -> Result<(), std::io::Error> {
     let result = unsafe { libc::kill(pid as i32, signal) };
     if result == 0 {
@@ -62,10 +75,12 @@ fn signal_process(pid: u32, signal: i32) -> Result<(), std::io::Error> {
     }
 }
 
+#[cfg(not(windows))]
 fn alive(pid: u32, start_ticks: u64, proc_root: &Path) -> bool {
     live_stat(pid, start_ticks, proc_root).is_some()
 }
 
+#[cfg(not(windows))]
 fn verify_root(
     proc_root: &Path,
     boot_id: &str,
@@ -111,6 +126,7 @@ fn verify_root(
     Ok(root.clone())
 }
 
+#[cfg(not(windows))]
 pub fn terminate(
     request: &TerminationRequest,
     proc_root: &Path,

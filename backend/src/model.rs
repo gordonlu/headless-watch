@@ -57,7 +57,10 @@ impl ProcessInfo {
 
     pub fn executable_basename(&self) -> String {
         let exe = self.exe.strip_suffix(" (deleted)").unwrap_or(&self.exe);
-        exe.rsplit('/').next().unwrap_or(exe).to_ascii_lowercase()
+        exe.rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(exe)
+            .to_ascii_lowercase()
     }
 }
 

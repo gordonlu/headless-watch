@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { PageName } from "../types";
 import { fmtAgo, fmtBytes, fmtCores, fmtDuration, fmtPct } from "../format";
-import { store } from "../store";
+import { isWindows, pssSupported, store } from "../store";
 import MetricCard from "../components/MetricCard.vue";
 import HistoryChart from "../components/HistoryChart.vue";
 import SessionCard from "../components/SessionCard.vue";
@@ -35,7 +35,7 @@ function openEnded(id: string) {
 }
 const cpuNote = "Per-PID tick deltas, never changing tree totals.";
 const machineNote = "Denominator is the live online CPU count.";
-const memoryNote = "ΣRSS may double-count shared pages; ΣPSS is sampled slowly.";
+const memoryNote = computed(() => isWindows.value ? "Working Set sum includes shared pages. PSS is unavailable on Windows." : "ΣRSS may double-count shared pages; ΣPSS is sampled slowly.");
 const chartWindow = computed(() => {
   const points = chartPoints.value;
   if (points.length < 2) return "No samples";
@@ -86,7 +86,7 @@ const memoryFoot = computed(() => {
         sub="Denominator is the current online CPU count"
         tag="Machine"
         :foot-left="`${summary?.online_cpus ?? '—'} CPUs`"
-        foot-right="never a static 16"
+        foot-right="live CPU denominator"
         accent="machine"
       />
       <MetricCard
@@ -148,10 +148,10 @@ const memoryFoot = computed(() => {
         </div>
         <div class="chart-meta">
           <div class="chart-legend">
-            <span class="legend-item"><span class="legend-swatch swatch-cyan"></span>ΣRSS (MiB)</span>
-            <span class="legend-item"><span class="legend-swatch swatch-amber"></span>ΣPSS (MiB)</span>
+            <span class="legend-item"><span class="legend-swatch swatch-cyan"></span>{{ isWindows ? 'Working Set' : 'ΣRSS' }} (MiB)</span>
+            <span v-if="pssSupported" class="legend-item"><span class="legend-swatch swatch-amber"></span>ΣPSS (MiB)</span>
           </div>
-          <span class="chart-window">PSS {{ overview?.settings.pss_interval_s ?? "—" }}s</span>
+          <span class="chart-window">{{ pssSupported ? `PSS ${overview?.settings.pss_interval_s ?? '—'}s` : 'PSS unavailable' }}</span>
         </div>
         <HistoryChart :points="chartPoints" metric="memory" />
         <div class="chart-foot"><span>{{ memoryNote }}</span><span>{{ fmtBytes(summary?.pss_sum ?? summary?.rss_sum) }} {{ summary?.pss_sum !== null ? "PSS" : "RSS" }}</span></div>

@@ -1,4 +1,5 @@
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -126,10 +127,12 @@ impl Storage {
     pub fn open(data_dir: &Path) -> Result<Self> {
         fs::create_dir_all(data_dir)
             .with_context(|| format!("cannot create data directory {}", data_dir.display()))?;
+        #[cfg(unix)]
         fs::set_permissions(data_dir, fs::Permissions::from_mode(0o700)).ok();
         let path = data_dir.join("headless-watch.db");
         let conn = Connection::open(&path)
             .with_context(|| format!("cannot open SQLite database {}", path.display()))?;
+        #[cfg(unix)]
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).ok();
         let version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
         if version > SCHEMA_VERSION {
@@ -845,11 +848,13 @@ mod tests {
     fn persists_and_reconciles_sessions() {
         let dir = tempfile::tempdir().expect("tempdir");
         let storage = Storage::open(dir.path()).expect("storage");
+        #[cfg(unix)]
         let mode = fs::metadata(&storage.path)
             .expect("metadata")
             .permissions()
             .mode()
             & 0o777;
+        #[cfg(unix)]
         assert_eq!(mode, 0o600);
         storage.upsert_session(&record("s1")).expect("insert");
         assert!(storage.load_open_session("s1").expect("load").is_some());

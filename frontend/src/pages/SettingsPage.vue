@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { downloadExport, getSettings, saveSettings } from "../api";
 import type { Settings, SettingsPayload } from "../types";
 import { fmtBytes } from "../format";
-import { refreshStore, store, toast } from "../store";
+import { isWindows, refreshStore, store, toast } from "../store";
 
 const defaults: Settings = {
   interval_s: 1,
@@ -112,8 +112,8 @@ onMounted(loadSettings);
             </label>
             <label class="field">
               <span>PSS interval</span>
-              <input v-model.number="form.pss_interval_s" type="number" min="5" max="300" step="5" />
-              <small>5–300 seconds. PSS never blocks the fast scanner.</small>
+              <input v-model.number="form.pss_interval_s" type="number" min="5" max="300" step="5" :disabled="isWindows" />
+              <small>{{ isWindows ? 'PSS is unavailable on Windows. Memory uses the process Working Set.' : '5–300 seconds. PSS never blocks the fast scanner.' }}</small>
             </label>
             <label class="field">
               <span>CDP polling interval</span>

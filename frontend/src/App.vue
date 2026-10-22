@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { PageName } from "./types";
 import { fmtAgo, fmtDuration } from "./format";
-import { initStore, pendingAlerts, refreshStore, store } from "./store";
+import { initStore, isWindows, pendingAlerts, refreshStore, store } from "./store";
 import type { Theme } from "./store";
 import OverviewPage from "./pages/OverviewPage.vue";
 import LivePage from "./pages/LivePage.vue";
@@ -20,7 +20,7 @@ const refreshing = ref(false);
 const theme = computed(() => store.theme);
 
 const titles: Record<PageName, string> = {
-  overview: "Invisible Browser Observatory",
+  overview: "Overview",
   live: "Live Sessions",
   history: "History",
   alerts: "Alerts",
@@ -28,6 +28,13 @@ const titles: Record<PageName, string> = {
 };
 
 const pageTitle = computed(() => titles[page.value]);
+const descriptions: Record<PageName, string> = {
+  overview: "Headless browser activity, at a glance.",
+  live: "Find, inspect and manage your browser sessions.",
+  history: "A persistent record of browser lifecycles.",
+  alerts: "The signals that need your attention.",
+  settings: "Make the monitor work for you.",
+};
 const terminalTitle = computed(() => page.value === "overview" ? "Headless Watch / System" : pageTitle.value);
 const health = computed(() => store.overview?.health);
 const summary = computed(() => store.overview?.summary);
@@ -50,7 +57,7 @@ const healthNote = computed(() => {
 const runtime = computed(() => {
   const settings = store.overview?.settings;
   if (!settings) return "Waiting for monitor settings…";
-  return `Scan ${settings.interval_s}s · alert ${settings.cpu_alert_cores} cores / ${settings.cpu_alert_duration_s}s · PSS ${settings.pss_interval_s}s · v${store.overview?.version} · monitor PID ${health.value?.monitor_pid}`;
+  return `${isWindows.value ? 'Windows' : 'Linux'} · scan ${settings.interval_s}s · alert ${settings.cpu_alert_cores} cores / ${settings.cpu_alert_duration_s}s · v${store.overview?.version} · PID ${health.value?.monitor_pid}`;
 });
 
 function readTheme(): Theme {
@@ -208,8 +215,8 @@ onMounted(() => {
     <main class="main" id="main">
       <header class="topbar">
         <div>
-          <p class="eyebrow">Local observability · 127.0.0.1</p>
           <h1><span class="title-standard">{{ pageTitle }}</span><span class="title-terminal">{{ terminalTitle }}</span></h1>
+          <p class="page-description">{{ descriptions[page] }}</p>
         </div>
         <div class="topbar-right">
           <span class="scan-age">{{ scanAge }}</span>
@@ -220,7 +227,8 @@ onMounted(() => {
             <button class="seg-btn" :class="{ 'is-active': theme === 'default' }" type="button" @click="setTheme('default')">Observatory</button>
             <button class="seg-btn" :class="{ 'is-active': theme === 'terminal' }" type="button" @click="setTheme('terminal')">Terminal</button>
           </div>
-          <button class="ghost-btn" type="button" :disabled="refreshing" @click="refresh">
+          <button class="ghost-btn refresh-btn" type="button" :disabled="refreshing" @click="refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>
             {{ refreshing ? "Refreshing…" : "Refresh" }}
           </button>
         </div>

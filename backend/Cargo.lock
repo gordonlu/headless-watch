@@ -469,6 +469,7 @@ dependencies = [
  "tungstenite",
  "url",
  "uuid",
+ "windows-sys",
 ]
 
 [[package]]

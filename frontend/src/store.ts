@@ -37,6 +37,10 @@ export const selectedSession = computed<SessionView | null>(() =>
     : null,
 );
 export const recentEnded = computed(() => store.overview?.recent_ended ?? []);
+export const isWindows = computed(() => store.overview?.health.platform === "windows");
+export const pssSupported = computed(() => store.overview?.health.pss_supported !== false);
+export const stopLabel = computed(() => isWindows.value ? "Force stop" : "Stop");
+export const stopMode = computed<"term" | "kill">(() => isWindows.value ? "kill" : "term");
 export const pendingAlerts = computed(() =>
   (store.overview?.events ?? []).filter(
     (event) =>
@@ -126,7 +130,7 @@ export function closeInspector(): void {
 }
 
 export function requestConfirm(session: SessionView, mode: "term" | "kill"): void {
-  store.confirm = { session, mode };
+  store.confirm = { session, mode: isWindows.value ? "kill" : mode };
 }
 
 export function closeConfirm(): void {

@@ -6,6 +6,7 @@ import {
   closeInspector,
   copyText,
   diagnosticReport,
+  isWindows,
   requestConfirm,
   selectedSession,
   store,
@@ -160,7 +161,7 @@ async function mute() {
                 <div class="detail-metric">
                   <span>Memory</span>
                   <strong>{{ fmtBytes(session.memory.pss_sum ?? session.memory.rss_sum) }}</strong>
-                  <small>{{ session.memory.pss_sum !== null ? "PSS" : "RSS upper bound" }} · {{ session.process_count }} processes</small>
+                  <small>{{ isWindows ? "Working Set upper bound" : session.memory.pss_sum !== null ? "PSS" : "RSS upper bound" }} · {{ session.process_count }} processes</small>
                 </div>
                 <div class="detail-metric">
                   <span>Peak CPU</span>
@@ -246,7 +247,7 @@ async function mute() {
             </div>
             <div class="footer-actions">
               <button
-                v-if="session.force_available"
+                v-if="session.force_available && !isWindows"
                 class="danger-btn small"
                 type="button"
                 @click="requestConfirm(session, 'kill')"
@@ -256,7 +257,7 @@ async function mute() {
                 type="button"
                 :disabled="!session.can_terminate"
                 @click="requestConfirm(session, 'term')"
-              >Stop · SIGTERM</button>
+              >{{ isWindows ? 'Force stop' : 'Stop · SIGTERM' }}</button>
             </div>
           </footer>
         </aside>

@@ -8,6 +8,13 @@ use crate::model::{ProcSnapshot, ProcessInfo};
 
 pub const BROWSER_EXECUTABLES: &[&str] = &[
     "chrome",
+    "chrome.exe",
+    "chromium.exe",
+    "msedge.exe",
+    "headless_shell.exe",
+    "headless-shell.exe",
+    "chrome-headless-shell.exe",
+    "chromium-headless-shell.exe",
     "google-chrome",
     "google-chrome-stable",
     "google-chrome-beta",
@@ -168,7 +175,10 @@ fn switch_value(proc: &ProcessInfo, switch: &str) -> Option<String> {
         if arg == switch {
             return proc.argv.get(index + 1).cloned();
         }
-        if !arg.chars().any(char::is_whitespace) {
+        // Native argv already preserves quoted values as a single argument.
+        // A profile path may contain spaces (especially under Windows). Keep
+        // the regex fallback only for legacy monolithic command-line fixtures.
+        if proc.argv.len() > 1 || !arg.chars().any(char::is_whitespace) {
             if let Some(value) = arg.strip_prefix(&format!("{switch}=")) {
                 return Some(value.to_string());
             }
@@ -291,6 +301,48 @@ mod tests {
             error: None,
             online_cpus: 8,
         }
+    }
+
+    #[test]
+    fn detects_windows_executables_and_quoted_profile_paths() {
+        let root = proc(
+            20,
+            1,
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            &[
+                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                "--headless=new",
+                "--remote-debugging-port=9222",
+            ],
+        );
+        assert!(is_headless_root(&root));
+        assert_eq!(browser_family(&root), "Google Chrome");
+        assert_eq!(cdp_endpoint(&root).port, Some(9222));
+        let edge = proc(
+            21,
+            1,
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            &["--headless"],
+        );
+        assert!(is_headless_root(&edge));
+        assert_eq!(browser_family(&edge), "Microsoft Edge");
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let profile = temp.path().join("Chrome Profile 测试");
+        fs::create_dir(&profile).expect("profile");
+        fs::write(profile.join("DevToolsActivePort"), "7891\n/browser\n").expect("port file");
+        let ephemeral = proc(
+            22,
+            1,
+            r"C:\Chrome\chrome.exe",
+            &[
+                "chrome.exe",
+                "--headless",
+                "--remote-debugging-port=0",
+                &format!("--user-data-dir={}", profile.display()),
+            ],
+        );
+        assert_eq!(cdp_endpoint(&ephemeral).port, Some(7891));
     }
 
     #[test]

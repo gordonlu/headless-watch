@@ -160,6 +160,9 @@ export interface SummaryView {
 }
 
 export interface HealthView {
+  platform?: string;
+  pss_supported?: boolean;
+  graceful_stop_supported?: boolean;
   status: string;
   last_scan_age_s: number | null;
   last_scan_at: string | null;

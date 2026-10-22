@@ -1,6 +1,6 @@
 # Headless Watch
 
-A local dashboard and history service for headless Chrome/Chromium browsers on Linux. It observes `/proc` and existing Chrome DevTools endpoints without modifying, restarting, or attaching input to the tools that launched the browser.
+A local dashboard and history service for headless Chrome/Chromium browsers on Linux and Windows. It observes native process information and existing Chrome DevTools endpoints without modifying, restarting, or attaching input to the tools that launched the browser.
 
 **v1.0** is the Rust/Tokio collector, Axum HTTP + SSE API, SQLite WAL history, and Vue 3 dashboard. The Python v0.2 implementation was removed after migration and is not part of the public source tree.
 
@@ -15,15 +15,16 @@ v1.0 Linux acceptance is complete. The implementation and prebuilt archive are t
 
 ## Platform support
 
-**Linux only.** The current implementation is built around Linux process observability and does not yet have a platform abstraction layer:
+| Capability | Linux | Windows |
+|---|---|---|
+| Process identity / CPU / memory | `/proc`, CPU ticks, RSS | Native process handles, creation FILETIME, CPU time, working set |
+| Proportional memory (PSS) | `smaps_rollup` | Unavailable; shown as unavailable rather than estimated |
+| Login startup | systemd user service | Current-user Startup shortcut; no administrator rights |
+| Stop browser subtree | Verified SIGTERM / SIGKILL | Verified force stop (`TerminateProcess`); graceful browser stop unavailable |
+| Desktop notifications | Optional `notify-send` | Not yet implemented; alerts remain in the dashboard |
+| Default data | XDG data path | `%LOCALAPPDATA%\headless-watch\data` |
 
-- `/proc` and `/proc/<pid>/smaps_rollup` for process identity, CPU ticks, and PSS.
-- `/sys/devices/system/cpu/online` for the machine CPU denominator.
-- systemd **user** services for installation and auto-start.
-- `notify-send` for desktop notifications.
-- XDG data paths (`~/.local/share/headless-watch`).
-
-Tested on Ubuntu (Wayland session, 16 online CPUs, Chrome 155). Other systemd-based Linux distributions are expected to work but are not yet in the test matrix. Windows and macOS are Post-v1 per the PRD; adding them requires a platform abstraction (`ProcessSource` / `ServiceManager` / `Notifier`) plus a real-OS CI matrix.
+The original Linux acceptance was performed on Ubuntu (Wayland, 16 online CPUs, Chrome 155). The repository now includes Linux and Windows build/test CI; see [Windows setup and limits](docs/WINDOWS.md) for native installation and validation. macOS is not supported. The historical PRD describes the original Linux scope.
 
 ### Linux completion before v1.0
 
@@ -44,7 +45,7 @@ The remaining Linux-only gates are tracked in [`docs/RELEASE-CHECKLIST.md`](docs
 - Reports `ΣRSS` as an upper-bound estimate and low-frequency `ΣPSS` with coverage and sample age.
 - Keeps source snapshots, lifecycle events, metric history, alert evidence, and action audits in SQLite WAL.
 - Provides a Vue 3 dashboard for Overview, Live Sessions, History, Alerts, and Settings.
-- Allows on-demand screenshots and a verified `SIGTERM`/`SIGKILL` only for the currently verified browser subtree.
+- Allows on-demand screenshots and verified browser-subtree termination: Linux signals or an explicitly confirmed Windows force stop.
 
 ## Repository layout
 
@@ -56,13 +57,13 @@ docs/            Product requirements
 install.sh       Builds and installs the user service
 ```
 
-- Linux with `/proc`
+- Linux with `/proc`, or Windows 10/11 with the MSVC Rust toolchain
 - Rust 1.85+ and Cargo (backend build)
 - Node 20+ and pnpm 9+ (dashboard build; not needed at runtime)
 - Chrome, Chromium, Edge, or `chrome-headless-shell` for browser detection
 - Optional: `notify-send` for desktop notifications
 
-No root privileges are required. Headless Watch only inspects and terminates processes owned by the current user.
+No root or administrator privileges are required. Headless Watch only inspects and terminates processes owned by the current user. Windows source builds also require the Visual Studio C++ Build Tools and Windows SDK.
 
 ## Run from source
 
@@ -83,7 +84,37 @@ cargo run --release --manifest-path backend/Cargo.toml -- \
 
 Open **http://127.0.0.1:8765**. The server binds only to `127.0.0.1`.
 
-## Install as a user service
+On Windows PowerShell:
+
+```powershell
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend build
+cargo run --release --manifest-path backend/Cargo.toml -- --web-dir frontend/dist
+```
+
+The default Windows database directory is `%LOCALAPPDATA%\headless-watch\data`; use `--data-dir` for a separate development database.
+
+## Install for the current user
+
+Windows PowerShell (source build, or extracted Windows release archive):
+
+```powershell
+.\install.ps1
+# Inspect the plan without changing files or login startup:
+.\install.ps1 -DryRun
+# Optional isolated install without login startup:
+.\install.ps1 -InstallDir "$PWD\dist\local-install" -NoAutoStart -SkipStart
+& "$env:LOCALAPPDATA\headless-watch\bin\headless-watch.exe" status
+```
+
+Windows installs to `%LOCALAPPDATA%\headless-watch` and registers a shortcut in the current user's Startup folder. `start` launches a hidden background monitor; `stop` verifies its PID, creation time, and executable before requesting graceful shutdown through a native event. Upgrades stop the verified monitor before replacing its executable. `-NoAutoStart` skips shortcut changes and `-SkipStart` skips immediate startup. No Windows service or elevated task is created.
+
+```powershell
+& "$env:LOCALAPPDATA\headless-watch\uninstall.ps1"             # preserve data and logs
+& "$env:LOCALAPPDATA\headless-watch\uninstall.ps1" -RemoveData # remove data explicitly
+```
+
+See [Windows setup and limits](docs/WINDOWS.md). Linux retains its systemd user service:
 
 ```bash
 bash install.sh
@@ -129,11 +160,11 @@ Keyboard shortcuts: `/` focuses session search, `Esc` closes the Inspector or a 
 
 ## Metrics definitions
 
-- **CPU (cores)**: sum of per-process `Δ(utime + stime) / elapsed / CLK_TCK`. New child processes never import historic ticks.
+- **CPU (cores)**: sum of per-process CPU time deltas divided by elapsed time. Linux converts `utime + stime` using `CLK_TCK`; Windows converts native kernel/user time from 100 ns ticks. New child processes never import historic ticks.
 - **CPU (one core)**: `cores × 100%`; a browser tree can exceed 100%.
 - **CPU (machine)**: `cores / online CPUs × 100%`, using the current online CPU count.
 - **ΣRSS**: arithmetic sum of resident memory for the browser root and its current descendants. This is an **upper bound** because Chrome shares pages.
-- **ΣPSS**: sampled proportional set size from `smaps_rollup`, reported with sample age and `sampled/total` coverage. PSS sampling never blocks the one-second process scan.
+- **ΣPSS**: Linux proportional set size from `smaps_rollup`, reported with sample age and `sampled/total` coverage. Windows does not expose the same measurement and reports PSS as unavailable. PSS sampling never blocks the one-second process scan.
 - **Peak CPU**: highest observed `cores` value for the session in the current run.
 - CPU first appears as `Calculating`; it requires two observations of the same process identity.
 
@@ -141,7 +172,7 @@ A browser that exits is marked stopped even if its parent has not yet reaped the
 
 ## Source evidence
 
-- Attribution uses the observed ancestry and cgroup at discovery time.
+- Attribution uses observed ancestry at discovery time, plus cgroup evidence on Linux when available.
 - **Observed** means the ancestor chain was directly visible. **Inferred** uses cgroup evidence. **Unknown** is used when nothing can be proven.
 - A browser already running before the monitor starts is marked `preexisting_at_start`; its origin is not reconstructed after the fact.
 - Launcher and driver are separate fields. `Playwright` is never reported as the launcher when the observed launcher is `OpenCode`.
@@ -157,11 +188,11 @@ A browser that exits is marked stopped even if its parent has not yet reaped the
 
 ## Stop, Force kill, and audit
 
-The dashboard requires explicit confirmation. Before signaling, the backend re-discovers the process tree and verifies boot ID, PID plus start time, same UID, and current headless-browser evidence. It signals only the verified current browser subtree; the launcher, IDE, Node, and unrelated Chrome processes are never included.
+The dashboard requires explicit confirmation. Before signaling, the backend re-discovers the process tree and verifies boot ID, PID plus start time, same user (Linux UID / Windows SID), and current headless-browser evidence. It signals only the verified current browser subtree; the launcher, IDE, Node, and unrelated Chrome processes are never included.
 
-- **Stop** sends `SIGTERM` to children first and the root last.
+- **Stop** on Linux sends `SIGTERM` to children first and the root last. Windows cannot reliably provide a graceful signal to a detached console/browser process; the UI offers an explicitly confirmed **Force stop**, backed by identity-verified `TerminateProcess`. A Windows API request for graceful stop is rejected without terminating a process.
 - **Batch stop** works from the Live table: select up to 20 sessions, review the second confirmation, and each session is re-verified independently. Rejected sessions do not affect the others.
-- If the root survives, **Force kill** becomes available for a separately confirmed `SIGKILL`.
+- On Linux, if the root survives, **Force kill** becomes available for a separately confirmed `SIGKILL`.
 - A stale scan, reused PID, or changed browser evidence is rejected.
 - Every attempt, rejection, target count, signal count, survivor count, and result is stored in the SQLite action audit.
 
@@ -171,7 +202,7 @@ The dashboard requires explicit confirmation. Before signaling, the backend re-d
 - A CPU alert is emitted once per episode, with a clear event when CPU returns below `threshold × clear ratio`.
 - Global mute and per-session mute suppress desktop notifications while keeping alert events.
 - Parent, launcher, and driver exits update the session status and event log but do not produce desktop notifications; only new browsers, suspected leftovers, sustained CPU alerts, and action failures notify.
-- Desktop notifications use `notify-send` and contain only the browser name, PID, source summary, and metric values — no URLs or full commands.
+- Linux desktop notifications use `notify-send` and contain only the browser name, PID, source summary, and metric values — no URLs or full commands. Windows reports desktop notifications as unavailable; alerts, evidence, and acknowledgement remain available in the dashboard.
 - SQLite WAL stores raw one-second metrics for the configured raw window (default 24 hours), one-minute rollups for 7 days, and events, action audits, and ended-session metadata for the configured event window (default 30 days).
 
 ## API
@@ -207,7 +238,7 @@ GET  /api/v1/export?format=json|csv&dataset=sessions|events|actions
 - `Host`, `Origin`, and `Sec-Fetch-Site` are validated for state-changing requests; no CORS headers are emitted.
 - The dashboard is served with a strict Content Security Policy, `X-Frame-Options: DENY`, `nosniff`, and no referrer.
 - Commands, URLs, paths, and secret switches are redacted before storage or display.
-- The SQLite data directory is created with `0700` permissions and the database file with `0600`.
+- Linux creates the SQLite data directory with `0700` permissions and the database file with `0600`. Windows uses the inherited ACLs of the current user's LocalAppData directory; choose an appropriately private directory when overriding `--data-dir`.
 - This is not a security boundary against a malicious process running as the same user. For guaranteed cleanup, isolate each agent in a systemd service or cgroup.
 
 ## Themes
@@ -228,12 +259,14 @@ journalctl --user -u headless-watch -f
 
 `headless-watch status` reports the running version and active session count.
 
+On Windows, installed background output is written to `%LOCALAPPDATA%\headless-watch\logs\headless-watch.log`. At the next start, logs larger than 2 MiB rotate to one `headless-watch.previous.log`; a continuously running process does not rotate its log. Windows login startup does not restart the monitor automatically after a crash.
+
 ## Commands and options
 
 ```text
-headless-watch start           Start the installed systemd user service
+headless-watch start           Start the installed per-user background monitor
 headless-watch status          Show service or local HTTP health (--port)
-headless-watch stop            Stop the installed systemd user service
+headless-watch stop            Stop the installed per-user background monitor
 headless-watch open            Open the dashboard in the desktop browser (--port)
 
 --port PORT                    Loopback HTTP port (default: 8765)
@@ -297,11 +330,13 @@ bash uninstall.sh            # remove service, binaries, and data
 bash uninstall.sh --keep-data
 ```
 
+Create the equivalent Windows ZIP and SHA-256 checksum with `powershell -File tools/package-release.ps1`. The archive includes a prebuilt `.exe`, dashboard assets, `install.ps1`, and `uninstall.ps1`; installation does not require Cargo or pnpm.
+
 ## Known limitations
 
 - No tray icon in v0.5; the dashboard is the system entry point.
-- Desktop notifications do not yet deep-link into the relevant Inspector; the Alerts page contains the same evidence.
+- Windows desktop toast notifications and proportional memory (PSS) are unavailable; the dashboard retains alerts and working-set memory metrics.
 - The dashboard is a single-user local tool; there is no remote authentication model.
 - No continuous CDP screencast, page navigation, JavaScript execution, or input takeover.
-- Windows and macOS are not supported.
-- A packaged standalone Linux binary is planned for v1.0; v0.5 builds with Cargo and pnpm.
+- macOS is not supported.
+- Linux-specific acceptance and benchmark scripts under `tools/` still require Linux. Windows uses native Rust tests and the setup workflow described in `docs/WINDOWS.md`.

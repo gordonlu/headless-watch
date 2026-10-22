@@ -1,13 +1,17 @@
+#[cfg(not(windows))]
 use std::process::{Command, Stdio};
 
+#[cfg(not(windows))]
 use crate::util::truncate_chars;
 
+#[cfg(not(windows))]
 fn dashboard_url(session_id: Option<&str>) -> Option<String> {
     let base = std::env::var("HEADLESS_WATCH_DASHBOARD_URL").ok()?;
     let session = session_id?;
     Some(format!("{base}#live?session={session}"))
 }
 
+#[cfg(not(windows))]
 pub fn available() -> bool {
     Command::new("notify-send")
         .arg("--version")
@@ -18,6 +22,7 @@ pub fn available() -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(not(windows))]
 pub fn send(title: &str, body: &str, session_id: Option<&str>) {
     let url = dashboard_url(session_id);
     let mut command = Command::new("notify-send");
@@ -34,7 +39,7 @@ pub fn send(title: &str, body: &str, session_id: Option<&str>) {
             command.stdout(Stdio::piped()).stderr(Stdio::null());
             if let Ok(output) = command.output() {
                 if String::from_utf8_lossy(&output.stdout).contains("default") {
-                    let _ = Command::new("xdg-open").arg(url).spawn();
+                    let _ = crate::util::open_browser(&url);
                 }
             }
         } else {
@@ -42,3 +47,13 @@ pub fn send(title: &str, body: &str, session_id: Option<&str>) {
         }
     });
 }
+
+// Windows alerts remain in the dashboard. Native toast registration is not
+// implemented; do not spawn PowerShell or claim notifications are available.
+#[cfg(windows)]
+pub fn available() -> bool {
+    false
+}
+
+#[cfg(windows)]
+pub fn send(_title: &str, _body: &str, _session_id: Option<&str>) {}

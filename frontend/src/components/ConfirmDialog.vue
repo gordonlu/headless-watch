@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { ApiError, terminateSession } from "../api";
-import { closeConfirm, refreshStore, store, toast } from "../store";
+import { closeConfirm, isWindows, refreshStore, store, toast } from "../store";
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const checked = ref(false);
@@ -9,8 +9,8 @@ const busy = ref(false);
 const error = ref("");
 
 const request = computed(() => store.confirm);
-const modeLabel = computed(() => (request.value?.mode === "kill" ? "Force kill" : "Stop gracefully"));
-const verb = computed(() => (request.value?.mode === "kill" ? "SIGKILL" : "SIGTERM"));
+const modeLabel = computed(() => isWindows.value ? "Force stop" : request.value?.mode === "kill" ? "Force kill" : "Stop gracefully");
+const verb = computed(() => isWindows.value ? "TerminateProcess" : request.value?.mode === "kill" ? "SIGKILL" : "SIGTERM");
 
 watch(
   request,
@@ -84,11 +84,11 @@ async function confirmAction() {
           <div><dt>Origin</dt><dd>{{ request.session.source.summary }}</dd></div>
           <div><dt>Root PID</dt><dd>{{ request.session.pid }}</dd></div>
           <div><dt>Processes</dt><dd>{{ request.session.process_count }} in verified subtree</dd></div>
-          <div><dt>Signal</dt><dd>{{ verb }}</dd></div>
+          <div><dt>Method</dt><dd>{{ verb }}</dd></div>
           <div><dt>Session</dt><dd><code>{{ request.session.id }}</code></dd></div>
         </dl>
         <p class="notice notice-warning">
-          This sends a signal to the currently verified browser root and its same-UID descendants. It does not target the launching Agent or other Chrome processes. The action cannot be undone.
+          {{ isWindows ? 'Windows forcefully terminates the verified browser subtree. In-flight work can be lost. Process creation time and the current user SID are checked again before termination.' : 'This sends a signal to the currently verified browser root and its same-UID descendants.' }} Launchers and unrelated browsers are excluded. The action cannot be undone.
         </p>
         <label class="check-row" for="confirm-check">
           <input id="confirm-check" v-model="checked" type="checkbox" :disabled="busy" />

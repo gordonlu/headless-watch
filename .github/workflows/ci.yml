@@ -1,0 +1,46 @@
+name: Cross-platform checks
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm --dir frontend build
+      - run: pnpm --dir frontend typecheck
+      - run: cargo fmt --manifest-path backend/Cargo.toml --check
+      - run: cargo test --all-targets --manifest-path backend/Cargo.toml
+      - name: Native Windows browser acceptance
+        if: runner.os == 'Windows'
+        run: python tools/windows_smoke.py
+      - name: Parse and dry-run Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./install.ps1 -DryRun -NoAutoStart -SkipStart -InstallDir "$env:RUNNER_TEMP/headless-watch-ci"
+          $scripts = @('install.ps1', 'uninstall.ps1', 'tools/package-release.ps1')
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $script), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }

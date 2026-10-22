@@ -44,5 +44,51 @@ pub fn truncate_chars(text: &str, max_chars: usize) -> String {
 }
 
 pub fn home_dir() -> String {
+    #[cfg(windows)]
+    return std::env::var("USERPROFILE").unwrap_or_default();
+    #[cfg(not(windows))]
     std::env::var("HOME").unwrap_or_else(|_| "/".to_string())
+}
+
+/// Open the local dashboard using the registered browser without a command shell.
+pub fn open_browser(url: &str) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        let wide = |value: &str| -> Vec<u16> {
+            std::ffi::OsStr::new(value)
+                .encode_wide()
+                .chain(Some(0))
+                .collect()
+        };
+        let operation = wide("open");
+        let target = wide(url);
+        let result = unsafe {
+            ShellExecuteW(
+                std::ptr::null_mut(),
+                operation.as_ptr(),
+                target.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            )
+        };
+        if result as isize <= 32 {
+            return Err(std::io::Error::other(format!(
+                "Windows browser launch failed ({})",
+                result as isize
+            )));
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let status = std::process::Command::new("xdg-open").arg(url).status()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(std::io::Error::other("xdg-open failed"))
+        }
+    }
 }

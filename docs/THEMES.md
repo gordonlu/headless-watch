@@ -1,10 +1,12 @@
 # Themes
 
-The original dark interface remains the default. **Terminal** is the optional second theme, built with the `design-taste-frontend` (tasteskill v2) app-screen process.
+The refined dark **Observatory** interface is the default. **Terminal** remains the optional second theme.
 
 ## Observatory (default)
 
-The original dark console: deep-blue ground, mint/cyan telemetry, session cards and the existing inspector/dialog styling. No existing component or class was removed to add the new theme.
+Charcoal surfaces (`#101216`, `#171a20`), fine grey borders, teal activity and blue secondary telemetry. Public Sans UI text and IBM Plex Mono figures are self-hosted. A 224px sidebar, four key metrics, three telemetry plots, horizontal session rows, and a quieter activity log retain the existing navigation and workflows. On phones all five navigation destinations remain visible, metrics form two columns, and charts and session details stack. Keyboard focus and reduced-motion support are retained.
+
+The styling lives in `frontend/src/theme-observatory.css`, scoped away from Terminal. Both themes use backend-reported platform capabilities: Windows shows Working Set memory, disables unsupported PSS sampling, and presents an explicitly confirmed Force stop action rather than a SIGTERM label.
 
 ## Terminal
 
@@ -24,6 +26,10 @@ http://127.0.0.1:8765/?theme=terminal
 ```
 
 ## Verification
+
+The Windows refinement was checked in real Chrome with Playwright at 1440×1000, 768×1024, and 390×844: navigation, session search, table mode, Inspector, theme switching, Windows PSS controls, and horizontal overflow. The visual reference and rendered screen were inspected together for sidebar layout, palette, typography, metric hierarchy, chart framing, and session controls. Data comes from the native Windows collector; reference figures are illustrative. The result deliberately retains source-confidence evidence, per-core CPU units, and an event timeline instead of copying illustrative reference data or replacing brand marks with third-party artwork.
+
+Earlier Terminal verification:
 
 - `design-taste-frontend` `inspect.mjs --app` at 1440, 768 and 390: **no FAILs**. One WARN remains for an empty band in the signal log when only one or two sessions exist; this is the honest empty-log state, not hidden data.
 - Default Observatory smoke test passes, including Inspector, deep links, screenshots, alerts, stop flow and restart.

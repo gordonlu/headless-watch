@@ -15,6 +15,9 @@ use headless_watch::settings::Settings;
 use tokio::sync::broadcast;
 use tracing_subscriber::EnvFilter;
 
+#[cfg(windows)]
+mod windows_lifecycle;
+
 #[derive(Debug, Parser)]
 #[command(name = "headless-watch", version = VERSION)]
 struct Cli {
@@ -26,14 +29,14 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Start the installed systemd user service.
+    /// Start the installed per-user background monitor.
     Start,
     /// Show service or local HTTP health.
     Status {
         #[arg(long, default_value_t = 8765)]
         port: u16,
     },
-    /// Stop the installed systemd user service.
+    /// Stop the installed per-user background monitor.
     Stop,
     /// Open the dashboard in the desktop browser.
     Open {
@@ -69,11 +72,19 @@ struct ServeArgs {
 }
 
 fn default_data_dir() -> Result<PathBuf> {
-    if let Ok(value) = std::env::var("XDG_DATA_HOME") {
-        return Ok(PathBuf::from(value).join("headless-watch"));
+    #[cfg(windows)]
+    {
+        let local = std::env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is not set")?;
+        return Ok(PathBuf::from(local).join("headless-watch").join("data"));
     }
-    let home = std::env::var("HOME").context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(".local/share/headless-watch"))
+    #[cfg(not(windows))]
+    {
+        if let Ok(value) = std::env::var("XDG_DATA_HOME") {
+            return Ok(PathBuf::from(value).join("headless-watch"));
+        }
+        let home = std::env::var("HOME").context("HOME is not set")?;
+        Ok(PathBuf::from(home).join(".local/share/headless-watch"))
+    }
 }
 
 fn apply_cli_settings(cli: &ServeArgs, settings: &mut Settings) {
@@ -111,28 +122,38 @@ fn main() -> Result<()> {
 fn run_command(command: Command) -> Result<()> {
     match command {
         Command::Start => {
-            let status = std::process::Command::new("systemctl")
-                .args(["--user", "start", "headless-watch.service"])
-                .status()
-                .context("systemctl is not available")?;
-            if !status.success() {
-                anyhow::bail!(
+            #[cfg(windows)]
+            return windows_lifecycle::start();
+            #[cfg(not(windows))]
+            {
+                let status = std::process::Command::new("systemctl")
+                    .args(["--user", "start", "headless-watch.service"])
+                    .status()
+                    .context("systemctl is not available")?;
+                if !status.success() {
+                    anyhow::bail!(
                     "could not start headless-watch.service; run install.sh first or check `systemctl --user status headless-watch`"
                 );
+                }
+                println!("Headless Watch service start requested.");
+                Ok(())
             }
-            println!("Headless Watch service start requested.");
-            Ok(())
         }
         Command::Stop => {
-            let status = std::process::Command::new("systemctl")
-                .args(["--user", "stop", "headless-watch.service"])
-                .status()
-                .context("systemctl is not available")?;
-            if !status.success() {
-                anyhow::bail!("could not stop headless-watch.service");
+            #[cfg(windows)]
+            return windows_lifecycle::stop();
+            #[cfg(not(windows))]
+            {
+                let status = std::process::Command::new("systemctl")
+                    .args(["--user", "stop", "headless-watch.service"])
+                    .status()
+                    .context("systemctl is not available")?;
+                if !status.success() {
+                    anyhow::bail!("could not stop headless-watch.service");
+                }
+                println!("Headless Watch service stop requested.");
+                Ok(())
             }
-            println!("Headless Watch service stop requested.");
-            Ok(())
         }
         Command::Status { port } => {
             if let Some(health) = local_health(port) {
@@ -142,29 +163,34 @@ fn run_command(command: Command) -> Result<()> {
                 );
                 return Ok(());
             }
-            let output = std::process::Command::new("systemctl")
-                .args(["--user", "status", "--no-pager", "headless-watch.service"])
-                .output();
-            match output {
-                Ok(result) if result.status.success() => {
-                    print!("{}", String::from_utf8_lossy(&result.stdout));
-                    Ok(())
-                }
-                _ => {
-                    println!("Headless Watch is not running on 127.0.0.1:{port} and no user service was found.");
-                    Ok(())
+            #[cfg(windows)]
+            {
+                println!("Headless Watch is not responding on 127.0.0.1:{port}. Use `headless-watch start` after install.ps1, or run the server from source.");
+                return Ok(());
+            }
+            #[cfg(not(windows))]
+            {
+                let output = std::process::Command::new("systemctl")
+                    .args(["--user", "status", "--no-pager", "headless-watch.service"])
+                    .output();
+                match output {
+                    Ok(result) if result.status.success() => {
+                        print!("{}", String::from_utf8_lossy(&result.stdout));
+                        Ok(())
+                    }
+                    _ => {
+                        println!("Headless Watch is not running on 127.0.0.1:{port} and no user service was found.");
+                        Ok(())
+                    }
                 }
             }
         }
         Command::Open { port } => {
             let url = format!("http://127.0.0.1:{port}");
-            match std::process::Command::new("xdg-open").arg(&url).status() {
-                Ok(status) if status.success() => Ok(()),
-                _ => {
-                    println!("Open {url}");
-                    Ok(())
-                }
+            if let Err(err) = headless_watch::util::open_browser(&url) {
+                println!("Open {url} ({err})");
             }
+            Ok(())
         }
     }
 }
@@ -211,7 +237,12 @@ fn run_server(cli: ServeArgs) -> Result<()> {
         .with_target(false)
         .init();
 
-    let data_dir = cli.data_dir.clone().unwrap_or(default_data_dir()?);
+    let data_dir = match cli.data_dir.clone() {
+        Some(path) => path,
+        None => default_data_dir()?,
+    };
+    #[cfg(windows)]
+    let instance = windows_lifecycle::Instance::register(&data_dir, cli.port)?;
     let web_dir = resolve_web_dir(cli.web_dir.clone())?;
     let index_template = Arc::<str>::from(read_index_template(&web_dir)?);
     let mut core = Core::open(&data_dir, web_dir.clone(), None, None)?;
@@ -276,9 +307,15 @@ fn run_server(cli: ServeArgs) -> Result<()> {
         );
         let app = build_app(state.clone());
         let serve_shutdown = shutdown_tx.clone();
+        #[cfg(windows)]
+        let stop_event = instance.event_handle();
         axum::serve(listener, app)
             .with_graceful_shutdown(async move {
-                shutdown_signal().await;
+                shutdown_signal(
+                    #[cfg(windows)]
+                    stop_event,
+                )
+                .await;
                 let _ = serve_shutdown.send(true);
                 tokio::spawn(async {
                     tokio::time::sleep(Duration::from_secs(5)).await;
@@ -295,9 +332,13 @@ fn run_server(cli: ServeArgs) -> Result<()> {
     result
 }
 
-async fn shutdown_signal() {
+async fn shutdown_signal(#[cfg(windows)] stop_event: usize) {
     let ctrl_c = async {
-        let _ = tokio::signal::ctrl_c().await;
+        // A hidden Windows background monitor may have no attached console.
+        // Failure to install a console handler is not a shutdown request.
+        if tokio::signal::ctrl_c().await.is_err() {
+            std::future::pending::<()>().await;
+        }
     };
     #[cfg(unix)]
     let terminate = async {
@@ -307,7 +348,16 @@ async fn shutdown_signal() {
             signal.recv().await;
         }
     };
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    let terminate = async move {
+        loop {
+            if windows_lifecycle::event_signaled(stop_event) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    };
+    #[cfg(not(any(unix, windows)))]
     let terminate = std::future::pending::<()>();
     tokio::select! {
         _ = ctrl_c => {},
