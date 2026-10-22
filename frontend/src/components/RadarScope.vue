@@ -99,7 +99,6 @@ function draw(timestamp: number) {
   ctx.stroke();
 
   const maxProcesses = Math.max(...props.sessions.map((session) => session.process_count), 1);
-  const maxCpu = Math.max(...props.sessions.map((session) => session.cpu.cores ?? 0), 0.01);
   const usedAngles: number[] = [];
   for (const session of props.sessions) {
     let angle = angleFor(session.id);
@@ -112,7 +111,8 @@ function draw(timestamp: number) {
       guard += 1;
     }
     usedAngles.push(angle);
-    const load = Math.min(1, Math.max(0, (session.cpu.cores ?? 0) / maxCpu));
+    // Absolute scale: one fully busy core sits at the centre; idle sessions stay at the edge.
+    const load = Math.min(1, Math.max(0, session.cpu.cores ?? 0));
     const scale = 0.18 + 0.72 * (1 - load);
     const x = cx + Math.cos(angle) * radius * scale;
     const y = cy + Math.sin(angle) * radius * scale;

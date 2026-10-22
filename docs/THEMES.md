@@ -12,7 +12,7 @@ The original dark console: deep-blue ground, mint/cyan telemetry, session cards 
 - **Move**: a 64px icon rail, a radar signal field, a dense signal log with an embedded CPU trace and event trace, and a single wide signal-history scope. Every selection is a 1px accent line; figures use tabular monospace; there are no cards-in-a-grid ornaments.
 - **Face**: Public Sans for interface text and IBM Plex Mono for figures, IDs and timestamps. Fonts are self-hosted under `frontend/src/assets/fonts/` (licences included).
 - **Data hues**: CPU is white ink, machine share is blue (`#4a8ad6`), memory is blue/grey; red is reserved for alerts and negative status. Chrome stays neutral.
-- **Signature elements**: the radar signal field (distance = CPU load, closer centre = higher; size = process count; angle = session identity; colour = launcher), the signal log + live event trace, the CPU trace strip, and the oversized telemetry readout strip. The sweep runs at 1.8s per revolution with a 60° trail. Radar/monitoring views are canvas; the CPU strip is real SVG data.
+- **Signature elements**: the radar signal field (distance = absolute CPU load (1 busy core sits at the centre); size = process count; angle = session identity; colour = launcher), the signal log + live event trace, the CPU trace strip, and the oversized telemetry readout strip. The sweep runs at 1.8s per revolution with a 60° trail. Radar/monitoring views are canvas; the CPU strip is real SVG data.
 - **Screens covered**: overview, live sessions/list, history, alerts, settings, and the session inspector/dialogs.
 
 ## Switching
