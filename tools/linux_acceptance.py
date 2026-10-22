@@ -496,8 +496,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             result["lifecycle"] = {"skipped": "Chrome/Chromium not installed"}
         else:
             pidfile = output_dir / "lifecycle-chrome.pid"
+            mcp_script = output_dir / "mcp.py"
             launcher_script = output_dir / "launcher.py"
-            launcher_script.write_text(
+            mcp_script.write_text(
                 "import os, subprocess, time\n"
                 "chrome = os.environ['HW_CHROME']\n"
                 "profile = os.environ['HW_PROFILE']\n"
@@ -510,11 +511,22 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 "while True: time.sleep(1)\n",
                 encoding="utf-8",
             )
+            launcher_script.write_text(
+                "import os, subprocess, time\n"
+                "python = os.environ['HW_PYTHON']\n"
+                "mcp = os.environ['HW_MCP_SCRIPT']\n"
+                "subprocess.Popen(['bash', '-c', f'exec -a node {python} {mcp} playwright-mcp'],\n"
+                "                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "while True: time.sleep(1)\n",
+                encoding="utf-8",
+            )
             env = dict(os.environ)
             env.update(
                 HW_CHROME=chrome_binary,
                 HW_PROFILE=lifecycle_profile.name,
                 HW_PIDFILE=str(pidfile),
+                HW_PYTHON=shutil.which("python3"),
+                HW_MCP_SCRIPT=str(mcp_script),
             )
             launcher = subprocess.Popen(
                 [
@@ -537,10 +549,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 raise AcceptanceFailure("opencode launcher did not start Chrome")
             lifecycle_pid = int(pidfile.read_text(encoding="utf-8"))
             lifecycle_session = wait_for_session(base, token, lifecycle_pid, args.timeout)
-            if lifecycle_session.get("source", {}).get("launcher") != "OpenCode":
-                raise AcceptanceFailure(
-                    f"launcher ancestry was not OpenCode: {lifecycle_session.get('source')}"
-                )
+            source = lifecycle_session.get("source", {})
+            if source.get("launcher") != "OpenCode" or source.get("driver") != "Playwright":
+                raise AcceptanceFailure(f"launcher/driver ancestry was not separated: {source}")
             os.kill(launcher.pid, signal.SIGKILL)
             launcher.wait(timeout=5)
             deadline = time.monotonic() + args.timeout
@@ -579,7 +590,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             )
             result["lifecycle"] = {
                 "launcher": observed.get("source", {}).get("launcher"),
+                "driver": observed.get("source", {}).get("driver"),
                 "launcher_exited": True,
+                "parent_alive": not observed.get("parent", {}).get("exited", True),
                 "suspected_leftover": True,
             }
 
@@ -694,6 +707,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         for process in (fake, stress, chrome, launcher, server):
             if process is not None:
                 terminate_group(process)
+        if launcher is not None:
+            try:
+                os.killpg(launcher.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
         profile.cleanup()
         lifecycle_profile.cleanup()
         shutil.rmtree(data_dir, ignore_errors=True)

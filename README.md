@@ -269,6 +269,12 @@ Full Rust + Vue end-to-end smoke test (private server, target and observer Chrom
 python3 tools/rust_dashboard_smoke.py
 ```
 
+Linux-only acceptance checks (Force kill, real crash convergence, OpenCode → playwright-mcp → Chrome lifecycle, 101-process stress, cross-site API attempts, port conflict/no-orphan):
+
+```bash
+python3 tools/linux_acceptance.py
+```
+
 The browser tests launch their own temporary Chrome instances with isolated profiles. Existing browsers and user profiles are never touched.
 
 ## Packaging
