@@ -43,18 +43,35 @@ pub fn parse_stat(raw: &str) -> Option<StatFields> {
         return None;
     }
     let comm = raw[open + 1..close].to_string();
-    let fields: Vec<&str> = raw[close + 2..].split_whitespace().collect();
-    if fields.len() < 22 {
-        return None;
+    let mut fields = raw[close + 2..].split_whitespace();
+    let state = fields.next()?.to_string();
+    let ppid = fields.next()?.parse().ok()?;
+    let mut utime = None;
+    let mut stime = None;
+    let mut starttime = None;
+    let mut rss_pages = None;
+    let mut index = 2usize;
+    for field in fields {
+        match index {
+            11 => utime = field.parse().ok(),
+            12 => stime = field.parse().ok(),
+            19 => starttime = field.parse().ok(),
+            21 => {
+                rss_pages = field.parse().ok();
+                break;
+            }
+            _ => {}
+        }
+        index += 1;
     }
     Some(StatFields {
         comm,
-        state: fields[0].to_string(),
-        ppid: fields[1].parse().ok()?,
-        utime: fields[11].parse().ok()?,
-        stime: fields[12].parse().ok()?,
-        starttime: fields[19].parse().ok()?,
-        rss_pages: fields[21].parse().ok()?,
+        state,
+        ppid,
+        utime: utime?,
+        stime: stime?,
+        starttime: starttime?,
+        rss_pages: rss_pages?,
     })
 }
 

@@ -243,6 +243,14 @@ headless-watch open            Open the dashboard in the desktop browser (--port
 
 CLI values apply to the current run. Values saved from the Settings page persist in SQLite.
 
+## Performance benchmark
+
+```bash
+python3 tools/benchmark.py --seconds 60
+```
+
+It starts a private server, warms up, then reports backend CPU and RSS. On the current Ubuntu test machine it measures roughly **1.0-1.1% of one logical core** and **11-13 MiB RSS** with the default 1s scan and existing browser sessions. The PRD target is <1%; this is at the measurement noise boundary and remains an open release gate. Use `--max-cpu 1.1` to turn it into a regression gate.
+
 ## Tests
 
 Rust unit and API tests:

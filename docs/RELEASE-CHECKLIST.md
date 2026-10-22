@@ -38,7 +38,7 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 
 ## Other v1.0 items
 
-- [ ] Measure performance targets: RSS is ~11-13 MiB; CPU measured at ~1.0% of one logical core in the acceptance sample after batching SQLite writes, lazy `/proc` reads, and session persist throttling. Record a longer repeatable benchmark before release.
+- [ ] Measure performance targets: RSS is ~11-13 MiB; `tools/benchmark.py --seconds 60` measures ~1.0-1.1% of one logical core. The <1% target is at the noise boundary and is not marked passed yet.
 - [x] Add `headless-watch start/status/stop/open` CLI commands (PRD FR-09).
 - [x] Notification click-through opens the related session Inspector (PRD FR-07); depends on desktop notification action support.
 - [x] Service log rate limiting via systemd journald plus `status` version/health reporting (PRD FR-09).
