@@ -156,13 +156,31 @@ function draw() {
             points.length - 1,
           ],
   );
-  for (const index of positions) {
-    const start = index === 0;
-    const end = index === points.length - 1;
+  const labelPositions = [...positions]
+    .map((index) => ({
+      index,
+      x: index === 0 ? left : index === points.length - 1 ? left + plotW : xFor(index),
+    }))
+    .sort((a, b) => a.x - b.x);
+  const keptLabels: typeof labelPositions = [];
+  for (const item of labelPositions) {
+    const isFirst = item.index === 0;
+    const isLast = item.index === points.length - 1;
+    if (!isFirst && !isLast) {
+      const firstX = keptLabels[0]?.x ?? left;
+      const lastX = left + plotW;
+      if (item.x - firstX < 48 || lastX - item.x < 48) continue;
+    }
+    if (keptLabels.some((kept) => Math.abs(kept.x - item.x) < 48)) continue;
+    keptLabels.push(item);
+  }
+  for (const item of keptLabels) {
+    const start = item.index === 0;
+    const end = item.index === points.length - 1;
     context.textAlign = start ? "left" : end ? "right" : "center";
     context.fillStyle = axis;
     context.font = chartFont;
-    context.fillText(axisTime(points[index].t), start ? left : end ? left + plotW : xFor(index), top + plotH + 9);
+    context.fillText(axisTime(points[item.index].t), item.x, top + plotH + 9);
   }
 
   for (const item of series) {

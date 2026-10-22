@@ -638,7 +638,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "Boolean(document.querySelector('.alert-list') || document.querySelector('.empty-state'))",
             "the Alerts page",
         )
-        alerts_heading = evaluate("document.querySelector('h1')?.textContent")
+        alerts_heading = evaluate("document.querySelector('h1')?.innerText")
         if alerts_heading != "Alerts":
             raise SmokeFailure(f"Alerts page did not render: {alerts_heading}")
 

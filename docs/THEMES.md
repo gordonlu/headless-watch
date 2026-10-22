@@ -12,7 +12,7 @@ The original dark console: deep-blue ground, mint/cyan telemetry, session cards 
 - **Move**: every selection is a 1px accent line on the nearest edge; figures use tabular monospace; cards are darker than the ground; there are no filled selection pills or decorative glows.
 - **Face**: Public Sans for interface text and IBM Plex Mono for figures, IDs and timestamps. Fonts are self-hosted under `frontend/src/assets/fonts/` (licences included).
 - **Data hues**: CPU is white ink, machine share is blue (`#4a8ad6`), memory is blue/grey; red is reserved for alerts and negative status. Chrome stays neutral.
-- **Signature elements**: the four-cell KPI strip, the dense three-column telemetry row and the session provenance sparkline.
+- **Signature elements**: a 64px icon rail, a full-width signal deck with three stacked oscilloscope-style charts, the four-cell KPI strip, and dense full-width session rows with a provenance sparkline.
 - **Screens covered**: overview, live sessions/list, history, alerts, settings, and the session inspector/dialogs.
 
 ## Switching

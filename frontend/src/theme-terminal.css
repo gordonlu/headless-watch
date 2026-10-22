@@ -884,3 +884,378 @@ html[data-theme="terminal"] .toast {
     border-left: 0;
   }
 }
+
+/* Terminal operator layout: icon rail, full-width signal deck, dense rows. */
+html[data-theme="terminal"] .shell {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 0;
+  padding: 0;
+  background: #050607;
+}
+
+html[data-theme="terminal"] .rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  margin: 0;
+  padding: 14px 8px 12px;
+  border-right: 1px solid #1b2024;
+  background: #050607;
+}
+
+html[data-theme="terminal"] .brand {
+  justify-content: center;
+}
+
+html[data-theme="terminal"] .brand-copy,
+html[data-theme="terminal"] .nav-label,
+html[data-theme="terminal"] .nav-text,
+html[data-theme="terminal"] .nav-index,
+html[data-theme="terminal"] .nav-count,
+html[data-theme="terminal"] .rail-label,
+html[data-theme="terminal"] .rail-health,
+html[data-theme="terminal"] .rail-meta,
+html[data-theme="terminal"] .rail-note,
+html[data-theme="terminal"] .rail-key {
+  display: none;
+}
+
+html[data-theme="terminal"] .nav-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+html[data-theme="terminal"] .nav {
+  width: 100%;
+  align-items: center;
+  gap: 4px;
+}
+
+html[data-theme="terminal"] .nav-item {
+  width: 46px;
+  height: 46px;
+  min-height: 46px;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid transparent;
+  border-radius: 0;
+  color: #777b80;
+  background: transparent;
+}
+
+html[data-theme="terminal"] .nav-item:hover {
+  color: var(--text);
+  background: #0b0f12;
+}
+
+html[data-theme="terminal"] .nav-item.is-active {
+  border-left-color: var(--cyan);
+  background: #0b0f12;
+  color: var(--text);
+}
+
+html[data-theme="terminal"] .nav-item.is-active .nav-icon {
+  stroke: var(--cyan);
+}
+
+html[data-theme="terminal"] .rail-status {
+  width: 46px;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+html[data-theme="terminal"] .rail-status .status-line {
+  justify-content: center;
+  margin: 0;
+}
+
+html[data-theme="terminal"] .rail-status .status-line span:last-child {
+  display: none;
+}
+
+html[data-theme="terminal"] .rail-status .dot {
+  width: 8px;
+  height: 8px;
+  flex-basis: 8px;
+}
+
+html[data-theme="terminal"] .main {
+  min-height: 100vh;
+  padding: 18px 24px 28px;
+  background: #050607;
+}
+
+html[data-theme="terminal"] .topbar {
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #1b2024;
+}
+
+html[data-theme="terminal"] .title-standard {
+  display: none;
+}
+
+html[data-theme="terminal"] .title-terminal {
+  display: inline;
+}
+
+html[data-theme="terminal"] .topbar h1 {
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+html[data-theme="terminal"] .page {
+  gap: 18px;
+}
+
+html[data-theme="terminal"] .kpis {
+  border: 0;
+  border-top: 1px solid #222224;
+  border-bottom: 1px solid #222224;
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-theme="terminal"] .kpi {
+  padding: 14px 18px 13px;
+  border-right: 1px solid #222224;
+  background: transparent;
+}
+
+html[data-theme="terminal"] .kpi-value {
+  font-size: 30px;
+}
+
+html[data-theme="terminal"] .section-head {
+  margin-bottom: 10px;
+}
+
+html[data-theme="terminal"] .section-head h2 {
+  font-size: 18px;
+}
+
+html[data-theme="terminal"] .chart-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid #222224;
+  background: #080a0c;
+}
+
+html[data-theme="terminal"] .chart-panel.compact {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-areas:
+    "head chart"
+    "meta chart"
+    "foot foot";
+  column-gap: 18px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid #222224;
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-theme="terminal"] .chart-panel.compact:last-child {
+  border-bottom: 0;
+}
+
+html[data-theme="terminal"] .chart-panel.compact .panel-head {
+  grid-area: head;
+  display: block;
+}
+
+html[data-theme="terminal"] .chart-panel.compact .chart-meta {
+  grid-area: meta;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+html[data-theme="terminal"] .chart-panel.compact .chart-wrap {
+  grid-area: chart;
+  height: 104px;
+  margin: 0;
+  padding-left: 16px;
+  border-top: 0;
+  border-left: 1px solid #222224;
+}
+
+html[data-theme="terminal"] .chart-panel.compact .chart-foot {
+  grid-area: foot;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid #1b1a1f;
+}
+
+html[data-theme="terminal"] .session-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+  border-top: 1px solid #222224;
+}
+
+html[data-theme="terminal"] .session-card {
+  grid-template-columns: minmax(0, 1fr) 220px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid #222224;
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-theme="terminal"] .session-card::before {
+  display: block;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-theme="terminal"] .session-card.risk-warning::before {
+  background: var(--red);
+}
+
+html[data-theme="terminal"] .session-card.risk-info::before {
+  background: var(--amber);
+}
+
+html[data-theme="terminal"] .session-card:hover {
+  background: #0b0f12;
+}
+
+html[data-theme="terminal"] .spark-wrap {
+  border-left: 1px solid #1b2024;
+}
+
+html[data-theme="terminal"] .panel,
+html[data-theme="terminal"] .settings-card,
+html[data-theme="terminal"] .table-wrap,
+html[data-theme="terminal"] .recent-row,
+html[data-theme="terminal"] .history-row,
+html[data-theme="terminal"] .alert-row {
+  border-color: #222224;
+  border-radius: 0;
+  background: #080a0c;
+}
+
+html[data-theme="terminal"] .ghost-btn,
+html[data-theme="terminal"] .primary-btn,
+html[data-theme="terminal"] .danger-btn,
+html[data-theme="terminal"] .stop-btn {
+  border-radius: 2px;
+}
+
+html[data-theme="terminal"] .search-wrap input,
+html[data-theme="terminal"] .select,
+html[data-theme="terminal"] .field input {
+  border-radius: 2px;
+}
+
+html[data-theme="terminal"] .seg-control {
+  border-radius: 2px;
+}
+
+html[data-theme="terminal"] .seg-btn {
+  border-radius: 0;
+}
+
+html[data-theme="terminal"] .theme-switch {
+  border-color: #2b3036;
+}
+
+@media (max-width: 900px) {
+  html[data-theme="terminal"] .shell {
+    display: flex;
+    flex-direction: column;
+  }
+
+  html[data-theme="terminal"] .rail {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 56px;
+    flex-direction: row;
+    align-items: center;
+    padding: 0 12px;
+    border-right: 0;
+    border-bottom: 1px solid #1b2024;
+    background: #050607;
+  }
+
+  html[data-theme="terminal"] .brand-mark {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  html[data-theme="terminal"] .nav {
+    width: auto;
+    flex-direction: row;
+    margin-left: auto;
+  }
+
+  html[data-theme="terminal"] .nav-item {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  html[data-theme="terminal"] .rail-status {
+    display: none;
+  }
+
+  html[data-theme="terminal"] .main {
+    padding: 16px 18px 24px;
+  }
+
+  html[data-theme="terminal"] .chart-panel.compact {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "head"
+      "meta"
+      "chart"
+      "foot";
+  }
+
+  html[data-theme="terminal"] .chart-panel.compact .chart-wrap {
+    border-top: 1px solid #222224;
+    border-left: 0;
+    padding-left: 0;
+    padding-top: 6px;
+  }
+}
+
+@media (max-width: 680px) {
+  html[data-theme="terminal"] .main {
+    padding: 14px 16px 22px;
+  }
+
+  html[data-theme="terminal"] .session-card {
+    grid-template-columns: 1fr;
+  }
+
+  html[data-theme="terminal"] .spark-wrap {
+    padding-top: 10px;
+    padding-left: 0;
+    border-top: 1px solid #1b2024;
+    border-left: 0;
+  }
+
+  html[data-theme="terminal"] .spark {
+    height: 64px;
+  }
+}

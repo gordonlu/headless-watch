@@ -296,6 +296,17 @@ kbd {
   font-size: 12px;
 }
 
+.nav-icon {
+  display: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .nav-item:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.035);
@@ -435,6 +446,10 @@ kbd {
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 22px;
+}
+
+.title-terminal {
+  display: none;
 }
 
 .topbar h1 {

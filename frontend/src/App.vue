@@ -28,6 +28,7 @@ const titles: Record<PageName, string> = {
 };
 
 const pageTitle = computed(() => titles[page.value]);
+const terminalTitle = computed(() => page.value === "overview" ? "Headless Watch / System" : pageTitle.value);
 const health = computed(() => store.overview?.health);
 const summary = computed(() => store.overview?.summary);
 const scannerState = computed(() => {
@@ -159,23 +160,28 @@ onMounted(() => {
 
       <nav class="nav" aria-label="Dashboard sections">
         <p class="nav-label">Observe</p>
-        <button class="nav-item" :class="{ 'is-active': page === 'overview' }" type="button" @click="go('overview')">
-          <span class="nav-index">01</span>Overview
+        <button class="nav-item" :class="{ 'is-active': page === 'overview' }" type="button" title="Overview" @click="go('overview')">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span class="nav-index">01</span><span class="nav-text">Overview</span>
         </button>
-        <button class="nav-item" :class="{ 'is-active': page === 'live' }" type="button" @click="go('live')">
-          <span class="nav-index">02</span>Live sessions
+        <button class="nav-item" :class="{ 'is-active': page === 'live' }" type="button" title="Live sessions" @click="go('live')">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 12 7 12 10 5 14 19 17 12 21 12"/></svg>
+          <span class="nav-index">02</span><span class="nav-text">Live sessions</span>
           <span v-if="summary?.active_sessions" class="nav-count">{{ summary.active_sessions }}</span>
         </button>
-        <button class="nav-item" :class="{ 'is-active': page === 'history' }" type="button" @click="go('history')">
-          <span class="nav-index">03</span>History
+        <button class="nav-item" :class="{ 'is-active': page === 'history' }" type="button" title="History" @click="go('history')">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg>
+          <span class="nav-index">03</span><span class="nav-text">History</span>
         </button>
-        <button class="nav-item" :class="{ 'is-active': page === 'alerts' }" type="button" @click="go('alerts')">
-          <span class="nav-index">04</span>Alerts
+        <button class="nav-item" :class="{ 'is-active': page === 'alerts' }" type="button" title="Alerts" @click="go('alerts')">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 7 3 9H3c0-2 3-2 3-9"/><path d="M10 21h4"/></svg>
+          <span class="nav-index">04</span><span class="nav-text">Alerts</span>
           <span v-if="pendingAlerts.length" class="nav-count nav-count-alert">{{ pendingAlerts.length }}</span>
         </button>
         <p class="nav-label nav-label-spaced">Control</p>
-        <button class="nav-item" :class="{ 'is-active': page === 'settings' }" type="button" @click="go('settings')">
-          <span class="nav-index">05</span>Settings
+        <button class="nav-item" :class="{ 'is-active': page === 'settings' }" type="button" title="Settings" @click="go('settings')">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>
+          <span class="nav-index">05</span><span class="nav-text">Settings</span>
         </button>
       </nav>
 
@@ -202,7 +208,7 @@ onMounted(() => {
       <header class="topbar">
         <div>
           <p class="eyebrow">Local observability · 127.0.0.1</p>
-          <h1>{{ pageTitle }}</h1>
+          <h1><span class="title-standard">{{ pageTitle }}</span><span class="title-terminal">{{ terminalTitle }}</span></h1>
         </div>
         <div class="topbar-right">
           <span class="scan-age">{{ scanAge }}</span>
