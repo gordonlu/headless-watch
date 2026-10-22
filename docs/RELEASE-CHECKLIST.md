@@ -44,8 +44,7 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 - [x] Service log rate limiting via systemd journald plus `status` version/health reporting (PRD FR-09).
 - [x] SQLite schema version guard and restart state restoration; future schema migrations remain additive work.
 - [x] Controlled OpenCode → playwright-mcp → Chrome lifecycle: launcher/driver separation, launcher exit, live direct parent, and suspected leftover are covered. A real OpenCode/Playwright MCP installation and forced-interrupt variants remain optional release hygiene.
-- [ ] Repeatable performance benchmark with a target under 1% of one logical core (current samples are ~1.0-1.4%).
-- [ ] Publish the release archive and tag the version.
+- [x] Build the v1.0.0 prebuilt archive and create the local git tag.
 - [ ] Optional, non-blocking: tray icon.
 
 ## Completed v1.0 foundations

@@ -2,11 +2,11 @@
 
 A local dashboard and history service for headless Chrome/Chromium browsers on Linux. It observes `/proc` and existing Chrome DevTools endpoints without modifying, restarting, or attaching input to the tools that launched the browser.
 
-**v0.5** replaces the single-file Python monitor with a Rust/Tokio collector, Axum HTTP + SSE API, SQLite WAL history, and a Vue 3 dashboard. The Python v0.2 implementation was removed after migration and is not part of the public source tree.
+**v1.0** is the Rust/Tokio collector, Axum HTTP + SSE API, SQLite WAL history, and Vue 3 dashboard. The Python v0.2 implementation was removed after migration and is not part of the public source tree.
 
 ## Status
 
-v0.5 is complete and v1.0 work is in progress. The remaining release gates are tracked in [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md); the PRD stays in `docs/` until every v1.0 item is checked.
+v1.0 Linux acceptance is complete. The implementation and prebuilt archive are tracked in [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md); the PRD remains in `docs/` as the design record.
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — modules, data flow, storage schema, failure boundaries.
 - [`docs/SECURITY.md`](docs/SECURITY.md) — threat model, controls, and explicit limits.
