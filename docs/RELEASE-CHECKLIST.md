@@ -1,0 +1,55 @@
+# Release checklist
+
+Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 gate below is checked.
+
+## v0.2 gate (Milestone A)
+
+| ID | Status | Evidence |
+|---|---|---|
+| AT-01 GUI Chrome is not detected | Done | `browser.rs` tests, dashboard smoke |
+| AT-02 headless browser appears within 2s | Done | 1s scanner; Rust smoke and legacy tests |
+| AT-03 CPU shows cores / one-core / machine | Done | `metrics` tests and dashboard smoke |
+| AT-04 new renderer does not import historic ticks | Done | tracker and legacy tests |
+| AT-05 RSS is an upper bound; PSS has coverage and age | Done | tracker, storage, dashboard smoke |
+| AT-09 pipe-only browsers are monitored without CDP | Done | browser/tracker tests, legacy integration |
+| AT-11 stale identity is rejected | Done | Rust smoke stale-identity rejection, legacy tests |
+
+## v0.5 gate (Milestone B)
+
+| ID | Status | Evidence |
+|---|---|---|
+| AT-06 launcher/parent exit keeps source history | Done | tracker tests for launcher exit, parent exit, suspected leftover; SQLite persistence |
+| AT-07 pre-existing browser reports Unknown origin | Done | tracker pre-existing test |
+| AT-08 CDP tabs and on-demand screenshot | Done | Rust smoke screenshot endpoint and Browser tab |
+| AT-12 history survives restart; UI reconnects | Done | Rust smoke restart, active rehydration, SSE reconnect |
+| AT-14 sustained CPU alert, mute, dedupe | Done | real high-CPU smoke, unit tests for cooldown and mute |
+| AT-15 Wayland/no-display operation | Done | server verified with `DISPLAY` and `WAYLAND_DISPLAY` unset |
+
+## v1.0 gate (Milestone C)
+
+| ID | Status | Remaining work |
+|---|---|---|
+| AT-10 Stop, Force kill, batch, full audit | Partial | Stop, batch, and audit are tested end-to-end. Force kill needs a real surviving-root scenario. |
+| AT-11 PID reuse rejection | Partial | Stale identity is tested. A real PID-reuse race should be exercised. |
+| AT-13 malicious local page cannot call the API | Partial | Host/Origin/token/content-type tests exist. Add a real cross-site browser attempt. |
+| AT-16 browser crash converges in UI | Partial | Tracker unit test covers root disappearance. Add a real `SIGKILL` crash run. |
+| AT-17 port conflict and no orphan monitor | Partial | CLI returns a readable bind error; add an automated port-conflict/no-orphan test. |
+| AT-18 100 browser child processes stay responsive | Partial | 100-process tracker stress test passes. Add a real browser tree and measure backend CPU/RSS and UI latency. |
+
+## Other v1.0 items
+
+- [ ] Measure performance targets: backend CPU < 1% of one logical core and RSS < 100 MiB in a typical workload.
+- [ ] Add `headless-watch start/status/stop/open` CLI commands (PRD FR-09).
+- [ ] Notification click-through into the related session detail (PRD FR-07).
+- [ ] Log size limit and update-state reporting (PRD FR-09).
+- [ ] Run one full real OpenCode + Playwright MCP lifecycle against the Rust backend: normal exit, forced interrupt, agent exit with browser alive, CDP available and unavailable.
+- [ ] Publish the release archive and tag the version.
+- [ ] Optional, non-blocking: tray icon.
+
+## Completed v1.0 foundations
+
+- [x] Batch cleanup with explicit multi-select and second confirmation (`POST /api/v1/terminate`).
+- [x] Copy diagnostic report and per-session mute.
+- [x] Prebuilt release tarball (`tools/package-release.sh`).
+- [x] Uninstaller with `--keep-data`.
+- [x] LICENSE and expanded README, architecture, and security docs.

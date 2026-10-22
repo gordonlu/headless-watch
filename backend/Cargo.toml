@@ -1,0 +1,48 @@
+[package]
+name = "headless-watch"
+version = "0.5.0"
+edition = "2021"
+license = "MIT"
+description = "Local observability and safe cleanup for headless Chromium browsers"
+default-run = "headless-watch"
+
+[lib]
+name = "headless_watch"
+path = "src/lib.rs"
+
+[[bin]]
+name = "headless-watch"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "4", features = ["derive"] }
+futures-util = "0.3"
+hex = "0.4"
+libc = "0.2"
+regex = "1"
+rusqlite = { version = "0.39", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tower-http = { version = "0.6", features = ["fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tungstenite = "0.26"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+http-body-util = "0.1"
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+lto = "thin"
+strip = true

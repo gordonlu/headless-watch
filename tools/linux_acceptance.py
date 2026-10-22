@@ -1,0 +1,393 @@
+#!/usr/bin/env python3
+"""Linux-only acceptance checks for the Rust backend.
+
+Covers scenarios that need real processes but no dashboard browser:
+
+1. Force kill: a fake headless browser root that ignores SIGTERM must survive
+   Stop, be reported as still_running, and be killed only by a confirmed kill.
+2. Crash convergence: a real headless Chrome is SIGKILLed; the session must
+   leave the live list and appear in ended history and Recently exited.
+3. Port conflict: a second server on the same port must exit with a readable
+   error, and stopping the first server must leave no orphan process.
+4. Resource sample: reports backend CPU and RSS while sessions are monitored.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from urllib.error import HTTPError
+from urllib.request import ProxyHandler, Request, build_opener
+
+ROOT = Path(__file__).resolve().parents[1]
+OPEN = build_opener(ProxyHandler({}))
+for key in ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+    os.environ.pop(key, None)
+os.environ["NO_PROXY"] = "127.0.0.1,localhost"
+
+
+class AcceptanceFailure(RuntimeError):
+    pass
+
+
+def free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def http_request(
+    base: str,
+    method: str,
+    path: str,
+    *,
+    token: str | None = None,
+    body: object | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    headers: dict[str, str] = {}
+    if token:
+        headers["X-Session-Token"] = token
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    request = Request(base + path, data=data, headers=headers, method=method)
+    try:
+        with OPEN.open(request, timeout=10) as response:
+            return response.status, dict(response.headers), response.read()
+    except HTTPError as err:
+        return err.code, dict(err.headers), err.read()
+
+
+def http_json(base: str, method: str, path: str, token: str | None = None, body: object | None = None):
+    status, headers, payload = http_request(base, method, path, token=token, body=body)
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        parsed = None
+    return status, headers, parsed, payload
+
+
+def wait_health(base: str, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            status, _, _, _ = http_json(base, "GET", "/api/v1/health")
+            if status == 200:
+                return
+        except Exception as err:
+            last_error = err
+        time.sleep(0.15)
+    raise AcceptanceFailure(f"server did not become healthy: {last_error}")
+
+
+def fetch_token(base: str) -> str:
+    status, _, page = http_request(base, "GET", "/")
+    if status != 200:
+        raise AcceptanceFailure(f"dashboard returned HTTP {status}")
+    match = re.search(r'name="hw-token" content="([^"]+)"', page.decode("utf-8"))
+    if not match or match.group(1) == "__TOKEN__":
+        raise AcceptanceFailure("dashboard token was not injected")
+    return match.group(1)
+
+
+def terminate_group(process: subprocess.Popen, timeout: float = 6.0) -> None:
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError, OSError):
+        return
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def start_server(binary: Path, port: int, web_dir: Path, data_dir: Path, log_path: Path) -> subprocess.Popen:
+    log = log_path.open("wb")
+    return subprocess.Popen(
+        [
+            str(binary),
+            "--port",
+            str(port),
+            "--web-dir",
+            str(web_dir),
+            "--data-dir",
+            str(data_dir),
+            "--no-notify",
+            "--interval",
+            "1",
+            "--cdp-interval",
+            "2",
+            "--pss-interval",
+            "15",
+        ],
+        cwd=ROOT,
+        stdin=subprocess.DEVNULL,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
+    )
+
+
+def resolve_binary(explicit: str | None) -> Path:
+    if explicit:
+        path = Path(explicit).resolve()
+        if not path.is_file():
+            raise AcceptanceFailure(f"binary not found: {path}")
+        return path
+    for candidate in (
+        ROOT / "backend/target/release/headless-watch",
+        ROOT / "backend/target/debug/headless-watch",
+    ):
+        if candidate.is_file():
+            return candidate
+    raise AcceptanceFailure("build the backend first: cargo build --release --manifest-path backend/Cargo.toml")
+
+
+def compile_fake_browser(directory: Path) -> Path | None:
+    compiler = shutil.which("cc") or shutil.which("gcc")
+    if not compiler:
+        return None
+    source = directory / "fake_chrome.c"
+    binary = directory / "chrome"
+    source.write_text(
+        "#include <signal.h>\n#include <unistd.h>\nint main(void){signal(SIGTERM, SIG_IGN); for(;;){pause();}}\n",
+        encoding="utf-8",
+    )
+    result = subprocess.run([compiler, "-O2", "-o", str(binary), str(source)], capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+    return binary
+
+
+def wait_for_session(base: str, token: str, pid: int, timeout: float) -> dict:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status, _, payload, _ = http_json(base, "GET", "/api/v1/overview", token)
+        if status == 200:
+            session = next((item for item in payload.get("sessions", []) if item.get("pid") == pid), None)
+            if session:
+                return session
+        time.sleep(0.25)
+    raise AcceptanceFailure(f"session for PID {pid} was not discovered")
+
+
+def wait_for_session_gone(base: str, token: str, pid: int, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        status, _, payload, _ = http_json(base, "GET", "/api/v1/overview", token)
+        if status == 200 and not any(item.get("pid") == pid for item in payload.get("sessions", [])):
+            return
+        time.sleep(0.25)
+    raise AcceptanceFailure(f"session for PID {pid} did not leave the live list")
+
+
+def process_cpu_ticks(pid: int) -> tuple[int, int]:
+    raw = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8", errors="replace")
+    close = raw.rfind(")")
+    fields = raw[close + 2 :].split()
+    return int(fields[11]), int(fields[12])
+
+
+def process_rss_kib(pid: int) -> int:
+    for line in Path(f"/proc/{pid}/status").read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("VmRSS:"):
+            return int(line.split()[1])
+    return 0
+
+
+def run(args: argparse.Namespace) -> dict[str, object]:
+    binary = resolve_binary(args.binary)
+    web_dir = (Path(args.web_dir) if args.web_dir else ROOT / "frontend/dist").resolve()
+    if not (web_dir / "index.html").is_file():
+        raise AcceptanceFailure(f"frontend build not found in {web_dir}; run pnpm --dir frontend build")
+    output_dir = Path(args.output_dir) if args.output_dir else Path(tempfile.mkdtemp(prefix="hw-linux-acceptance-"))
+    output_dir.mkdir(parents=True, exist_ok=True)
+    data_dir = Path(tempfile.mkdtemp(prefix="hw-linux-acceptance-data-"))
+    profile = tempfile.TemporaryDirectory(prefix="hw-linux-acceptance-profile-")
+    port = args.port or free_port()
+    base = f"http://127.0.0.1:{port}"
+    server: subprocess.Popen | None = None
+    fake: subprocess.Popen | None = None
+    chrome: subprocess.Popen | None = None
+    result: dict[str, object] = {"ok": False}
+    try:
+        server = start_server(binary, port, web_dir, data_dir, output_dir / "server.log")
+        wait_health(base, args.timeout)
+        token = fetch_token(base)
+        result["server"] = {"pid": server.pid, "port": port}
+
+        # 1. Force kill against a process that ignores SIGTERM.
+        fake_binary = compile_fake_browser(output_dir)
+        if fake_binary is None:
+            result["force_kill"] = {"skipped": "cc/gcc not available"}
+        else:
+            fake = subprocess.Popen(
+                [str(fake_binary), "--headless=new", "--remote-debugging-pipe"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            session = wait_for_session(base, token, fake.pid, args.timeout)
+            term_status, _, term_body, _ = http_json(
+                base,
+                "POST",
+                f"/api/v1/sessions/{session['id']}/terminate",
+                token,
+                {"identity": session["identity"], "mode": "term", "confirm": True},
+            )
+            if fake.poll() is not None:
+                raise AcceptanceFailure("fake browser exited after SIGTERM despite ignoring it")
+            if term_status not in {200, 409} or (term_body or {}).get("result") != "still_running":
+                raise AcceptanceFailure(f"SIGTERM result was not still_running: {term_status} {term_body}")
+            kill_status, _, kill_body, _ = http_json(
+                base,
+                "POST",
+                f"/api/v1/sessions/{session['id']}/terminate",
+                token,
+                {"identity": session["identity"], "mode": "kill", "confirm": True},
+            )
+            fake.wait(timeout=6)
+            if kill_status != 200 or not (kill_body or {}).get("ok"):
+                raise AcceptanceFailure(f"force kill failed: {kill_status} {kill_body}")
+            status, _, actions, _ = http_json(base, "GET", "/api/v1/actions?limit=50", token)
+            rows = (actions or {}).get("actions", [])
+            result["force_kill"] = {
+                "term": next((row.get("result") for row in rows if row.get("action") == "term"), None),
+                "kill": next((row.get("result") for row in rows if row.get("action") == "kill"), None),
+            }
+
+        # 2. Crash convergence with a real headless Chrome.
+        chrome_binary = shutil.which("google-chrome") or shutil.which("chromium")
+        if not chrome_binary:
+            result["crash_convergence"] = {"skipped": "Chrome/Chromium not installed"}
+        else:
+            chrome = subprocess.Popen(
+                [
+                    chrome_binary,
+                    "--headless=new",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--remote-debugging-port=0",
+                    f"--user-data-dir={profile.name}",
+                    "about:blank",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            session = wait_for_session(base, token, chrome.pid, args.timeout)
+            session_id = session["id"]
+            os.killpg(chrome.pid, signal.SIGKILL)
+            chrome.wait(timeout=5)
+            wait_for_session_gone(base, token, chrome.pid, args.timeout)
+            status, _, ended_payload, _ = http_json(base, "GET", "/api/v1/sessions?status=ended&limit=50", token)
+            ended = next(
+                (item for item in (ended_payload or {}).get("sessions", []) if item.get("id") == session_id),
+                None,
+            )
+            status, _, overview, _ = http_json(base, "GET", "/api/v1/overview", token)
+            recent = next(
+                (item for item in (overview or {}).get("recent_ended", []) if item.get("id") == session_id),
+                None,
+            )
+            if ended is None or recent is None:
+                raise AcceptanceFailure("crashed session was not persisted in history")
+            result["crash_convergence"] = {
+                "ended_at": ended.get("ended_at"),
+                "recent_exited": True,
+            }
+
+        # 3. Resource sample while the server is monitoring.
+        before = process_cpu_ticks(server.pid)
+        started = time.monotonic()
+        time.sleep(5.0)
+        after = process_cpu_ticks(server.pid)
+        elapsed = max(0.001, time.monotonic() - started)
+        ticks = (after[0] + after[1]) - (before[0] + before[1])
+        clk = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+        result["resources"] = {
+            "cpu_single_core_pct": round(ticks / clk / elapsed * 100.0, 3),
+            "rss_mib": round(process_rss_kib(server.pid) / 1024.0, 2),
+            "elapsed_s": round(elapsed, 2),
+        }
+
+        terminate_group(server)
+        server = None
+
+        # 4. Port conflict: the first server is stopped, so start two on one port.
+        conflict_port = free_port()
+        first = start_server(binary, conflict_port, web_dir, data_dir, output_dir / "conflict-first.log")
+        conflict_base = f"http://127.0.0.1:{conflict_port}"
+        wait_health(conflict_base, args.timeout)
+        second = start_server(binary, conflict_port, web_dir, data_dir, output_dir / "conflict-second.log")
+        second.wait(timeout=args.timeout)
+        second_log = (output_dir / "conflict-second.log").read_text(encoding="utf-8", errors="replace")
+        if second.returncode == 0:
+            terminate_group(second)
+            raise AcceptanceFailure("a second server unexpectedly bound the same port")
+        if "cannot bind" not in second_log and "Address already in use" not in second_log:
+            raise AcceptanceFailure(f"port conflict error was not readable: {second_log[-200:]}")
+        terminate_group(first)
+        first.wait(timeout=5)
+        if first.poll() is None:
+            raise AcceptanceFailure("the first server did not exit cleanly")
+        result["port_conflict"] = {"second_exit": second.returncode, "readable_error": True}
+
+        result["ok"] = True
+        return result
+    finally:
+        for process in (fake, chrome, server):
+            if process is not None:
+                terminate_group(process)
+        profile.cleanup()
+        shutil.rmtree(data_dir, ignore_errors=True)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--binary", help="Rust binary (default: release, then debug)")
+    parser.add_argument("--web-dir", help="Built frontend directory (default: frontend/dist)")
+    parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--timeout", type=float, default=20.0)
+    parser.add_argument("--output-dir", help="Directory for logs")
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    try:
+        result = run(args)
+    except AcceptanceFailure as err:
+        print(json.dumps({"ok": False, "error": str(err)}, indent=2), file=sys.stderr)
+        return 1
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
