@@ -52,6 +52,8 @@ ExecStart=%h/.local/share/headless-watch/bin/headless-watch --port 8765 --web-di
 Restart=on-failure
 RestartSec=3
 Environment=RUST_LOG=warn
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
 NoNewPrivileges=true
 PrivateTmp=true
 KillSignal=SIGTERM

@@ -494,6 +494,12 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         )
         time.sleep(0.3)
 
+        evaluate(f"location.hash = '#live?session={session_id}'; true")
+        wait_js("Boolean(document.querySelector('.inspector'))", "the notification deep link to open the Inspector")
+        time.sleep(0.35)
+        evaluate("document.querySelector('.inspector .icon-btn')?.click(); true")
+        wait_js("!document.querySelector('.inspector')", "the deep-linked Inspector to close")
+
         evaluate(
             "[...document.querySelectorAll('.nav-item')]"
             ".find(button => button.textContent.includes('Live sessions'))?.click(); true"
@@ -517,7 +523,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         )
         wait_js("Boolean(document.querySelector('.browser-tab'))", "the CDP browser tab list")
         evaluate(
-            "document.querySelector('.inspector .icon-btn[aria-label=\"Close Inspector\"]')?.click(); true"
+            "document.querySelector('.inspector .icon-btn')?.click(); true"
         )
         wait_js("!document.querySelector('.inspector')", "the Inspector to close")
 
@@ -685,6 +691,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 **ui,
                 "settings_fields": field_count,
                 "inspector_verified": True,
+                "deep_link_verified": True,
                 "stop_confirmation_verified": True,
                 "terminated_card_removed": True,
                 "stop_toast": toast_text,

@@ -242,6 +242,7 @@ impl Core {
         (failed && self.settings.notifications && !self.settings.global_mute).then(|| Notify {
             title: "Headless Watch action failed".to_string(),
             body: message,
+            session_id: Some(session_id.to_string()),
         })
     }
 
@@ -276,6 +277,7 @@ impl Core {
         (notify && self.settings.notifications && !self.settings.global_mute).then(|| Notify {
             title: "Headless Watch action rejected".to_string(),
             body: message,
+            session_id: Some(session_id.to_string()),
         })
     }
 

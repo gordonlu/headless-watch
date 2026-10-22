@@ -545,9 +545,10 @@ async fn reject_action(state: &AppState, id: &str, mode: &str, message: &str) ->
         core.record_rejected_action(id, mode, message, notify)
     };
     if let Some(notify) = notify {
-        let _ =
-            tokio::task::spawn_blocking(move || crate::notify::send(&notify.title, &notify.body))
-                .await;
+        let _ = tokio::task::spawn_blocking(move || {
+            crate::notify::send(&notify.title, &notify.body, notify.session_id.as_deref())
+        })
+        .await;
     }
     ApiError::new(StatusCode::CONFLICT, message)
 }
@@ -806,7 +807,7 @@ async fn run_termination(
             debug!(target: "headless_watch::actions", session = %id, "action audit recorded");
             if let Some(notify) = notify {
                 let _ = tokio::task::spawn_blocking(move || {
-                    crate::notify::send(&notify.title, &notify.body)
+                    crate::notify::send(&notify.title, &notify.body, notify.session_id.as_deref())
                 })
                 .await;
             }
@@ -824,7 +825,7 @@ async fn run_termination(
             };
             if let Some(notify) = notify {
                 let _ = tokio::task::spawn_blocking(move || {
-                    crate::notify::send(&notify.title, &notify.body)
+                    crate::notify::send(&notify.title, &notify.body, notify.session_id.as_deref())
                 })
                 .await;
             }

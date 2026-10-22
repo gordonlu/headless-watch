@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { PageName } from "./types";
 import { fmtAgo, fmtDuration } from "./format";
 import { initStore, pendingAlerts, refreshStore, store } from "./store";
@@ -14,7 +14,7 @@ import ToastStack from "./components/ToastStack.vue";
 import InspectorDrawer from "./components/InspectorDrawer.vue";
 
 const pages: PageName[] = ["overview", "live", "history", "alerts", "settings"];
-const page = ref<PageName>(readPage());
+const page = ref<PageName>(readPage().page);
 const refreshing = ref(false);
 
 const titles: Record<PageName, string> = {
@@ -50,15 +50,40 @@ const runtime = computed(() => {
   return `Scan ${settings.interval_s}s · alert ${settings.cpu_alert_cores} cores / ${settings.cpu_alert_duration_s}s · PSS ${settings.pss_interval_s}s · v${store.overview?.version} · monitor PID ${health.value?.monitor_pid}`;
 });
 
-function readPage(): PageName {
-  const value = window.location.hash.replace("#", "") as PageName;
-  return pages.includes(value) ? value : "overview";
+function readPage(): { page: PageName; session: string | null } {
+  const raw = window.location.hash.replace("#", "");
+  const [pagePart, query] = raw.split("?");
+  const value = pagePart as PageName;
+  const params = new URLSearchParams(query || "");
+  return {
+    page: pages.includes(value) ? value : "overview",
+    session: params.get("session"),
+  };
+}
+
+function applyHash() {
+  const parsed = readPage();
+  page.value = parsed.page;
+  if (parsed.session) store.pendingInspectorId = parsed.session;
 }
 
 function go(next: PageName) {
   page.value = next;
+  store.pendingInspectorId = null;
   if (window.location.hash !== `#${next}`) window.location.hash = next;
 }
+
+watch(
+  () => store.overview?.sessions.map((session) => session.id).join(","),
+  () => {
+    const pending = store.pendingInspectorId;
+    if (!pending) return;
+    if (store.overview?.sessions.some((session) => session.id === pending)) {
+      store.inspectorId = pending;
+      store.pendingInspectorId = null;
+    }
+  },
+);
 
 async function refresh() {
   refreshing.value = true;
@@ -94,10 +119,9 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  applyHash();
   void initStore();
-  window.addEventListener("hashchange", () => {
-    page.value = readPage();
-  });
+  window.addEventListener("hashchange", applyHash);
   window.addEventListener("keydown", onKeydown);
 });
 </script>

@@ -40,8 +40,9 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 
 - [ ] Measure performance targets: RSS is ~11-13 MiB; CPU measured at ~1.0% of one logical core in the acceptance sample after batching SQLite writes, lazy `/proc` reads, and session persist throttling. Record a longer repeatable benchmark before release.
 - [x] Add `headless-watch start/status/stop/open` CLI commands (PRD FR-09).
-- [ ] Notification click-through into the related session detail (PRD FR-07).
-- [ ] Log size limit and update-state reporting (PRD FR-09).
+- [x] Notification click-through opens the related session Inspector (PRD FR-07); depends on desktop notification action support.
+- [x] Service log rate limiting via systemd journald plus `status` version/health reporting (PRD FR-09).
+- [ ] Update/upgrade state restoration beyond the current SQLite schema version.
 - [ ] Run one full real OpenCode + Playwright MCP lifecycle against the Rust backend: normal exit, forced interrupt, agent exit with browser alive, CDP available and unavailable.
 - [ ] Repeatable performance benchmark with a target under 1% of one logical core (current samples are ~1.0-1.4%).
 - [ ] Publish the release archive and tag the version.

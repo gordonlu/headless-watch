@@ -205,6 +205,7 @@ pub struct SystemPoint {
 pub struct Notify {
     pub title: String,
     pub body: String,
+    pub session_id: Option<String>,
 }
 
 struct PendingEvent {
@@ -452,6 +453,7 @@ impl Tracker {
                                 session.root_pid,
                                 session.attribution.source_summary()
                             ),
+                            session_id: Some(session.id.clone()),
                         })
                     };
                 pending.push(PendingEvent {
@@ -1045,6 +1047,7 @@ impl Session {
                                 "{} · PID {} · parent exited",
                                 self.browser, self.root_pid
                             ),
+                            session_id: Some(self.id.clone()),
                         }),
                 });
             }
@@ -1072,6 +1075,7 @@ impl Session {
                                 "{} · PID {} · {}",
                                 self.browser, self.root_pid, self.attribution.launcher
                             ),
+                            session_id: Some(self.id.clone()),
                         }),
                 });
             }
@@ -1131,6 +1135,7 @@ impl Session {
                         notify: (!settings.global_mute && settings.notifications && !self.muted(now)).then(|| Notify {
                             title: "Suspected leftover browser".to_string(),
                             body: format!("{} · PID {} · source exited", self.browser, self.root_pid),
+                            session_id: Some(self.id.clone()),
                         }),
                     });
                 }
@@ -1177,6 +1182,7 @@ impl Session {
                         cpu.cores,
                         settings.cpu_alert_duration_s as i64
                     ),
+                    session_id: Some(self.id.clone()),
                 });
                 if notify.is_some() {
                     self.high_cpu_notified_at = Some(now);

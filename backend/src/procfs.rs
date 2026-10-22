@@ -168,17 +168,33 @@ pub fn parse_online_cpus(value: &str) -> Option<usize> {
 }
 
 pub fn online_cpu_count() -> usize {
+    static CACHE: OnceLock<Mutex<(std::time::Instant, usize)>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| {
+        Mutex::new((
+            std::time::Instant::now() - std::time::Duration::from_secs(120),
+            1,
+        ))
+    });
+    let mut guard = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if guard.0.elapsed() < std::time::Duration::from_secs(60) {
+        return guard.1.max(1);
+    }
     let parsed = fs::read_to_string("/sys/devices/system/cpu/online")
         .ok()
         .and_then(|value| parse_online_cpus(&value));
-    parsed
+    let count = parsed
         .or_else(|| {
             std::thread::available_parallelism()
                 .ok()
                 .map(|value| value.get())
         })
         .unwrap_or(1)
-        .max(1)
+        .max(1);
+    guard.0 = std::time::Instant::now();
+    guard.1 = count;
+    count
 }
 
 pub fn scan(proc_root: &Path, boot_id: &str) -> ProcSnapshot {

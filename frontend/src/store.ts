@@ -21,6 +21,7 @@ export const store = reactive({
   nowMs: Date.now(),
   toasts: [] as Toast[],
   inspectorId: null as string | null,
+  pendingInspectorId: null as string | null,
   pendingHistoryId: null as string | null,
   confirm: null as ConfirmRequest | null,
   helpOpen: false,

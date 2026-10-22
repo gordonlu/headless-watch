@@ -122,7 +122,7 @@ Python v0.2 is no longer distributed. The Rust service is the only supported bac
 - **Live Sessions**: card or table view, sort by CPU/memory/runtime/recent/risk, source and risk filters, instant search, multi-select batch stop in table view, and a right-side Inspector.
 - **Inspector**: Overview evidence, observed source chain and verified process tree, browser/CDP tab list with on-demand screenshots, session events, copy diagnostic report, mute, Stop, and Force kill.
 - **History**: persisted session lifecycles on a Gantt-like timeline, source evidence, launcher-exit markers, peak CPU and memory, event history, and action audits. Ended sessions are retained in SQLite even though they disappear from the live inventory.
-- **Alerts**: pending, acknowledged, and muted sustained-CPU or source-exit alerts with evidence and acknowledgement.
+- **Alerts**: pending, acknowledged, and muted sustained-CPU or source-exit alerts with evidence and acknowledgement. On desktops that support notification actions, clicking a Headless Watch notification opens the matching session Inspector.
 - **Settings**: sampling intervals, CPU alert threshold and duration, leftover delay, notification mute, screenshot permission, retention, and export controls.
 
 Keyboard shortcuts: `/` focuses session search, `Esc` closes the Inspector or a dialog, `?` opens the shortcut list.
@@ -208,6 +208,16 @@ GET  /api/v1/export?format=json|csv&dataset=sessions|events|actions
 - Commands, URLs, paths, and secret switches are redacted before storage or display.
 - The SQLite data directory is created with `0700` permissions and the database file with `0600`.
 - This is not a security boundary against a malicious process running as the same user. For guaranteed cleanup, isolate each agent in a systemd service or cgroup.
+
+## Logging
+
+When installed as a user service, logs go to journald and are rate-limited by the unit (`LogRateLimitIntervalSec=30s`, `LogRateLimitBurst=200`):
+
+```bash
+journalctl --user -u headless-watch -f
+```
+
+`headless-watch status` reports the running version and active session count.
 
 ## Commands and options
 

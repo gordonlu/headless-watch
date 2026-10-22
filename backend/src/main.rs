@@ -223,6 +223,10 @@ fn run_server(cli: ServeArgs) -> Result<()> {
     let initial_notices = core.initialize();
     let token = Arc::<str>::from(core.token.clone());
     let port = cli.port;
+    std::env::set_var(
+        "HEADLESS_WATCH_DASHBOARD_URL",
+        format!("http://127.0.0.1:{port}/"),
+    );
     let (tx, _) = broadcast::channel::<String>(16);
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     let state = AppState {
@@ -236,7 +240,7 @@ fn run_server(cli: ServeArgs) -> Result<()> {
     };
 
     for notify in initial_notices {
-        headless_watch::notify::send(&notify.title, &notify.body);
+        headless_watch::notify::send(&notify.title, &notify.body, notify.session_id.as_deref());
     }
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -315,7 +319,7 @@ async fn shutdown_signal() {
 fn publish(state: &AppState, notices: Vec<headless_watch::tracker::Notify>) {
     broadcast_state(state);
     for notify in notices {
-        headless_watch::notify::send(&notify.title, &notify.body);
+        headless_watch::notify::send(&notify.title, &notify.body, notify.session_id.as_deref());
     }
 }
 
