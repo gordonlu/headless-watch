@@ -1040,15 +1040,7 @@ impl Session {
                         self.browser
                     ),
                     evidence: json!({"parent_pid": parent.pid, "parent_state": state}),
-                    notify: (!settings.global_mute && settings.notifications && !self.muted(now))
-                        .then(|| Notify {
-                            title: "Browser parent exited".to_string(),
-                            body: format!(
-                                "{} · PID {} · parent exited",
-                                self.browser, self.root_pid
-                            ),
-                            session_id: Some(self.id.clone()),
-                        }),
+                    notify: None,
                 });
             }
         }
@@ -1068,15 +1060,7 @@ impl Session {
                         self.attribution.launcher, self.browser, self.root_pid
                     ),
                     evidence: json!({"launcher": self.attribution.launcher, "pid": identity.pid}),
-                    notify: (!settings.global_mute && settings.notifications && !self.muted(now))
-                        .then(|| Notify {
-                            title: "Browser launcher exited".to_string(),
-                            body: format!(
-                                "{} · PID {} · {}",
-                                self.browser, self.root_pid, self.attribution.launcher
-                            ),
-                            session_id: Some(self.id.clone()),
-                        }),
+                    notify: None,
                 });
             }
         }
@@ -1645,9 +1629,9 @@ mod tests {
         let launcher = process(200, 1, "/usr/bin/opencode", &["opencode"], 80, 0);
         let mut settings = Settings::default();
         settings.leftover_after_s = 10.0;
-        settings.notifications = false;
+        settings.notifications = true;
 
-        tracker.update(
+        let notices = tracker.update(
             snapshot(
                 vec![root.clone(), driver.clone(), launcher],
                 base_at,
@@ -1657,14 +1641,23 @@ mod tests {
             &settings,
             &mut store,
         );
+        assert!(notices
+            .iter()
+            .any(|notice| notice.title == "Headless browser detected"));
         let views = tracker.session_views(&settings, base_wall);
         assert_eq!(views[0].source.summary, "OpenCode / Playwright");
 
-        tracker.update(
+        let exit_notices = tracker.update(
             snapshot(vec![root.clone(), driver.clone()], base_at, 2.0, base_wall),
             &settings,
             &mut store,
         );
+        assert!(!exit_notices
+            .iter()
+            .any(|notice| notice.title.contains("launcher exited")));
+        assert!(!exit_notices
+            .iter()
+            .any(|notice| notice.title.contains("parent exited")));
         tracker.update(
             snapshot(vec![root.clone(), driver], base_at, 20.0, base_wall),
             &settings,

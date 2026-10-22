@@ -170,6 +170,7 @@ The dashboard requires explicit confirmation. Before signaling, the backend re-d
 - CPU alerts require a sustained threshold crossing (default `1.0 cores` for `30s`), never a single sample.
 - A CPU alert is emitted once per episode, with a clear event when CPU returns below `threshold × clear ratio`.
 - Global mute and per-session mute suppress desktop notifications while keeping alert events.
+- Parent, launcher, and driver exits update the session status and event log but do not produce desktop notifications; only new browsers, suspected leftovers, sustained CPU alerts, and action failures notify.
 - Desktop notifications use `notify-send` and contain only the browser name, PID, source summary, and metric values — no URLs or full commands.
 - SQLite WAL stores raw one-second metrics for the configured raw window (default 24 hours), one-minute rollups for 7 days, and events, action audits, and ended-session metadata for the configured event window (default 30 days).
 
