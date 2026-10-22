@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -13,7 +13,7 @@ use crate::model::{machine_pct, CpuValue, ProcSnapshot, ProcessIdentity, Process
 use crate::procfs::{descendants, identity_alive};
 use crate::redaction::{redact_argv, redact_path, redact_text};
 use crate::settings::Settings;
-use crate::storage::{ActionRow, EventRow, SessionRecord, Storage};
+use crate::storage::{ActionRow, EventRow, MetricSample, SessionRecord, Storage};
 use crate::util::{format_duration, iso_timestamp, now_wall};
 
 const ACTIVE_LIMIT: usize = 500;
@@ -268,6 +268,7 @@ struct Session {
     high_cpu_since: Option<Instant>,
     high_cpu_at: Option<f64>,
     high_cpu_notified_at: Option<f64>,
+    last_persist: Option<Instant>,
     stale: bool,
     terminating: bool,
     force_available: bool,
@@ -296,6 +297,8 @@ pub struct Tracker {
     pub scan_failures: u64,
     pub last_error: Option<String>,
     pub online_cpus: usize,
+    pending_metrics: Vec<MetricSample>,
+    last_metric_flush: Instant,
 }
 
 fn session_id(identity: &ProcessIdentity) -> String {
@@ -333,6 +336,8 @@ impl Tracker {
             scan_failures: 0,
             last_error: None,
             online_cpus: online_cpus.max(1),
+            pending_metrics: Vec::new(),
+            last_metric_flush: Instant::now(),
         }
     }
 
@@ -528,21 +533,34 @@ impl Tracker {
             self.emit(store, item);
         }
 
-        for session in self.sessions.values() {
-            if let Err(err) = store.upsert_session(&session.record(now)) {
-                warn!("failed to persist session: {err}");
+        for session in self.sessions.values_mut() {
+            let persist_due = session.last_persist.map_or(true, |last| {
+                now_instant.duration_since(last) >= Duration::from_secs(5)
+            });
+            if persist_due {
+                if let Err(err) = store.upsert_session(&session.record(now)) {
+                    warn!("failed to persist session: {err}");
+                }
+                session.last_persist = Some(now_instant);
             }
-            if let Err(err) = store.insert_metric(
-                &session.id,
-                now,
-                session.cpu.map(|value| value.cores),
-                session.rss_sum,
-                session.pss_sum,
-                session.processes.len(),
-                &session.cpu_quality,
-            ) {
-                warn!("failed to persist metric: {err}");
+            self.pending_metrics.push(MetricSample {
+                session_id: session.id.clone(),
+                ts: now,
+                cpu_cores: session.cpu.map(|value| value.cores),
+                rss_sum: session.rss_sum,
+                pss_sum: session.pss_sum,
+                process_count: session.processes.len(),
+                quality: session.cpu_quality.clone(),
+            });
+        }
+        if self.pending_metrics.len() >= 5
+            || self.last_metric_flush.elapsed() >= Duration::from_secs(5)
+        {
+            if let Err(err) = store.insert_metrics_batch(&self.pending_metrics) {
+                warn!("failed to persist metric batch: {err}");
             }
+            self.pending_metrics.clear();
+            self.last_metric_flush = Instant::now();
         }
 
         let cores = self
@@ -903,6 +921,7 @@ impl Session {
             high_cpu_since: None,
             high_cpu_at: None,
             high_cpu_notified_at: None,
+            last_persist: None,
             stale: false,
             terminating: false,
             force_available: false,

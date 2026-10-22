@@ -90,6 +90,17 @@ pub struct ActionRow {
     pub evidence: Value,
 }
 
+#[derive(Clone, Debug)]
+pub struct MetricSample {
+    pub session_id: String,
+    pub ts: f64,
+    pub cpu_cores: Option<f64>,
+    pub rss_sum: u64,
+    pub pss_sum: Option<u64>,
+    pub process_count: usize,
+    pub quality: String,
+}
+
 #[derive(Clone, Debug, Serialize)]
 pub struct MetricPoint {
     pub t: f64,
@@ -374,6 +385,32 @@ impl Storage {
                 quality
             ],
         )?;
+        Ok(())
+    }
+
+    pub fn insert_metrics_batch(&self, samples: &[MetricSample]) -> Result<()> {
+        if samples.is_empty() {
+            return Ok(());
+        }
+        let transaction = self.conn.unchecked_transaction()?;
+        {
+            let mut statement = transaction.prepare(
+                "INSERT INTO metric_samples(session_id,ts,cpu_cores,rss_sum,pss_sum,process_count,quality)
+                 VALUES(?1,?2,?3,?4,?5,?6,?7)",
+            )?;
+            for sample in samples {
+                statement.execute(params![
+                    sample.session_id,
+                    sample.ts,
+                    sample.cpu_cores,
+                    sample.rss_sum as i64,
+                    sample.pss_sum.map(|value| value as i64),
+                    sample.process_count as i64,
+                    sample.quality,
+                ])?;
+            }
+        }
+        transaction.commit()?;
         Ok(())
     }
 

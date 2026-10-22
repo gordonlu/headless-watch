@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
 use crate::model::{ProcSnapshot, ProcessInfo, StatFields};
@@ -103,10 +103,19 @@ pub fn read_process(pid: u32, boot_id: &str, proc_root: &Path) -> Option<Process
     if stat.state == "Z" {
         return None;
     }
-    let exe = fs::read_link(base.join("exe"))
-        .ok()
-        .map(|value| value.to_string_lossy().to_string())
-        .unwrap_or_default();
+    let comm_lower = stat.comm.to_ascii_lowercase();
+    let potential_browser = comm_lower.contains("chrome")
+        || comm_lower.contains("chrom")
+        || comm_lower.contains("edge")
+        || comm_lower.contains("headless");
+    let exe = if potential_browser {
+        fs::read_link(base.join("exe"))
+            .ok()
+            .map(|value| value.to_string_lossy().to_string())
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
     let exe = exe.strip_suffix(" (deleted)").unwrap_or(&exe).to_string();
     let name = if exe.is_empty() {
         stat.comm.clone()

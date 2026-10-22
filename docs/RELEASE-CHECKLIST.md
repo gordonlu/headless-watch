@@ -38,7 +38,7 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 
 ## Other v1.0 items
 
-- [ ] Measure performance targets: RSS is ~13 MiB; CPU measured at ~1.2% of one logical core with a 1s scan and existing sessions, so the < 1% target still needs either a longer measurement or further batching of SQLite writes.
+- [ ] Measure performance targets: RSS is ~11-13 MiB; CPU measured at ~1.0% of one logical core in the acceptance sample after batching SQLite writes, lazy `/proc` reads, and session persist throttling. Record a longer repeatable benchmark before release.
 - [x] Add `headless-watch start/status/stop/open` CLI commands (PRD FR-09).
 - [ ] Notification click-through into the related session detail (PRD FR-07).
 - [ ] Log size limit and update-state reporting (PRD FR-09).

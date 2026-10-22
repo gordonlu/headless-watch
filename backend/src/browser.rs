@@ -101,19 +101,24 @@ pub fn browser_family(proc: &ProcessInfo) -> String {
 }
 
 pub fn evidence_for(proc: &ProcessInfo) -> BrowserEvidence {
-    let is_browser = is_browser_executable(proc);
+    if !is_browser_executable(proc) {
+        return BrowserEvidence {
+            is_browser: false,
+            is_root: false,
+            is_headless: false,
+            role: None,
+            family: "Unknown".to_string(),
+            executable: proc.executable_basename(),
+        };
+    }
     let role = process_role(proc);
     let headless = has_headless_evidence(proc);
     BrowserEvidence {
-        is_browser,
-        is_root: is_browser && role.is_none() && headless,
+        is_browser: true,
+        is_root: role.is_none() && headless,
         is_headless: headless,
         role,
-        family: if is_browser {
-            browser_family(proc)
-        } else {
-            "Unknown".to_string()
-        },
+        family: browser_family(proc),
         executable: proc.executable_basename(),
     }
 }
