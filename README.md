@@ -2,7 +2,7 @@
 
 A local dashboard and history service for headless Chrome/Chromium browsers on Linux. It observes `/proc` and existing Chrome DevTools endpoints without modifying, restarting, or attaching input to the tools that launched the browser.
 
-**v0.5** replaces the single-file Python monitor with a Rust/Tokio collector, Axum HTTP + SSE API, SQLite WAL history, and a Vue 3 dashboard. The Python v0.2 implementation was removed from the main branch after migration and is preserved under the `v0.2-python` git tag.
+**v0.5** replaces the single-file Python monitor with a Rust/Tokio collector, Axum HTTP + SSE API, SQLite WAL history, and a Vue 3 dashboard. The Python v0.2 implementation was removed after migration and is not part of the public source tree.
 
 ## Status
 
@@ -114,11 +114,7 @@ rm -rf ~/.local/share/headless-watch
 systemctl --user daemon-reload
 ```
 
-To inspect or restore the removed Python v0.2 implementation:
-
-```bash
-git checkout v0.2-python -- legacy-python
-```
+Python v0.2 is no longer distributed. The Rust service is the only supported backend; its SQLite history lives in the configured `--data-dir`.
 
 ## Dashboard
 
