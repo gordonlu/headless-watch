@@ -11,3 +11,4 @@ frontend/dist/
 data/
 .DS_Store
 dist/
+.taste-skill/

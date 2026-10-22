@@ -16,6 +16,8 @@ import InspectorDrawer from "./components/InspectorDrawer.vue";
 const pages: PageName[] = ["overview", "live", "history", "alerts", "settings"];
 const page = ref<PageName>(readPage().page);
 const refreshing = ref(false);
+type Theme = "default" | "framed";
+const theme = ref<Theme>(readTheme());
 
 const titles: Record<PageName, string> = {
   overview: "Invisible Browser Observatory",
@@ -49,6 +51,22 @@ const runtime = computed(() => {
   if (!settings) return "Waiting for monitor settings…";
   return `Scan ${settings.interval_s}s · alert ${settings.cpu_alert_cores} cores / ${settings.cpu_alert_duration_s}s · PSS ${settings.pss_interval_s}s · v${store.overview?.version} · monitor PID ${health.value?.monitor_pid}`;
 });
+
+function readTheme(): Theme {
+  const query = new URLSearchParams(window.location.search).get("theme");
+  if (query === "framed" || query === "default") return query;
+  return localStorage.getItem("hw-theme") === "framed" ? "framed" : "default";
+}
+
+function applyTheme(value: Theme, persist = true) {
+  document.documentElement.dataset.theme = value === "framed" ? "framed" : "";
+  if (persist) localStorage.setItem("hw-theme", value);
+}
+
+function setTheme(value: Theme) {
+  theme.value = value;
+  applyTheme(value);
+}
 
 function readPage(): { page: PageName; session: string | null } {
   const raw = window.location.hash.replace("#", "");
@@ -119,6 +137,7 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  applyTheme(theme.value, false);
   applyHash();
   void initStore();
   window.addEventListener("hashchange", applyHash);
@@ -190,6 +209,10 @@ onMounted(() => {
           <span class="conn" :class="{ 'conn-offline': !store.connected }">
             <span class="conn-dot"></span>{{ store.connected ? "Live" : "Reconnecting" }}
           </span>
+          <div class="seg-control theme-switch" role="group" aria-label="Interface theme">
+            <button class="seg-btn" :class="{ 'is-active': theme === 'default' }" type="button" @click="setTheme('default')">Observatory</button>
+            <button class="seg-btn" :class="{ 'is-active': theme === 'framed' }" type="button" @click="setTheme('framed')">Framed</button>
+          </div>
           <button class="ghost-btn" type="button" :disabled="refreshing" @click="refresh">
             {{ refreshing ? "Refreshing…" : "Refresh" }}
           </button>

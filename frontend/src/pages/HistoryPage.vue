@@ -208,7 +208,7 @@ const detailView = computed<SessionView | null>(() => selected.value?.final_view
                 :width="ganttWidth(row)"
                 height="8"
                 rx="3"
-                :fill="statusOf(row).risk === 'warning' ? '#ffc06d' : '#4be4ba'"
+                :fill="statusOf(row).risk === 'warning' ? 'var(--chart-3)' : 'var(--chart-1)'"
               />
               <line
                 v-if="launcherExit(row)"
@@ -216,7 +216,7 @@ const detailView = computed<SessionView | null>(() => selected.value?.final_view
                 :x2="ganttX(launcherExit(row)!)"
                 y1="1"
                 y2="15"
-                stroke="#70c9ff"
+                stroke="var(--chart-2)"
                 stroke-width="1.5"
                 stroke-dasharray="2 2"
               />

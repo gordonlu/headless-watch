@@ -14,6 +14,23 @@ let observer: ResizeObserver | null = null;
 const finite = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value);
 
+function cssVar(name: string, fallback: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function alpha(color: string, value: number): string {
+  if (color.startsWith("#") && (color.length === 7 || color.length === 4)) {
+    const hex = color.length === 4
+      ? color.slice(1).split("").map((part) => part + part).join("")
+      : color.slice(1);
+    const red = Number.parseInt(hex.slice(0, 2), 16);
+    const green = Number.parseInt(hex.slice(2, 4), 16);
+    const blue = Number.parseInt(hex.slice(4, 6), 16);
+    return `rgba(${red}, ${green}, ${blue}, ${value})`;
+  }
+  return color;
+}
+
 function niceMax(value: number): number {
   if (!Number.isFinite(value) || value <= 0) return 1;
   const exponent = 10 ** Math.floor(Math.log10(value));
@@ -60,6 +77,13 @@ function draw() {
   const plotW = Math.max(1, width - left - right);
   const plotH = Math.max(1, height - top - bottom);
   const metric = props.metric;
+  const chart1 = cssVar("--chart-1", "#4be4ba");
+  const chart2 = cssVar("--chart-2", "#70c9ff");
+  const chart3 = cssVar("--chart-3", "#ffc06d");
+  const axis = cssVar("--chart-axis", "#7187a1");
+  const grid = cssVar("--chart-grid", "rgba(38,53,74,.7)");
+  const baseline = cssVar("--chart-baseline", "rgba(58,84,106,.9)");
+  const chartFont = cssVar("--chart-font", "9px ui-monospace, monospace");
   let series: { values: (number | null)[]; color: string; fill: boolean; dash: number[] }[];
   let maxValue = 0;
   if (metric === "memory") {
@@ -68,15 +92,15 @@ function draw() {
       finite(point.pss_sum) && point.pss_sum >= 0 ? point.pss_sum / 1048576 : null,
     );
     series = [
-      { values: rss, color: "#70c9ff", fill: true, dash: [] },
-      { values: pss, color: "#ffc06d", fill: false, dash: [4, 3] },
+      { values: rss, color: chart2, fill: true, dash: [] },
+      { values: pss, color: chart3, fill: false, dash: [4, 3] },
     ];
     maxValue = Math.max(...rss.filter(finite), ...pss.filter(finite), 0);
   } else if (metric === "machine") {
     series = [
       {
         values: points.map((point) => (finite(point.machine_pct) ? point.machine_pct : null)),
-        color: "#70c9ff",
+        color: chart2,
         fill: true,
         dash: [],
       },
@@ -86,7 +110,7 @@ function draw() {
     series = [
       {
         values: points.map((point) => (finite(point.cores) ? point.cores : null)),
-        color: "#4be4ba",
+        color: chart1,
         fill: true,
         dash: [],
       },
@@ -96,6 +120,9 @@ function draw() {
   const max = niceMax(maxValue * 1.15);
   const firstT = points[0].t;
   const lastT = points[points.length - 1].t;
+  const span = lastT - firstT;
+  const axisTime = (timestamp: number) =>
+    span < 60 ? `+${(timestamp - firstT).toFixed(1)}s` : fmtClock(timestamp);
   const xFor = (index: number) =>
     left + (lastT === firstT ? plotW / 2 : ((points[index].t - firstT) / (lastT - firstT)) * plotW);
   const yFor = (value: number) => top + plotH - (Math.max(0, value) / max) * plotH;
@@ -105,35 +132,37 @@ function draw() {
   for (let index = 0; index <= 4; index += 1) {
     const value = (max * index) / 4;
     const y = top + plotH - (index / 4) * plotH;
-    context.strokeStyle = index === 0 ? "rgba(58,84,106,.9)" : "rgba(38,53,74,.7)";
+    context.strokeStyle = index === 0 ? baseline : grid;
     context.beginPath();
     context.moveTo(left, y + 0.5);
     context.lineTo(left + plotW, y + 0.5);
     context.stroke();
-    context.fillStyle = "#7187a1";
-    context.font = "9px ui-monospace, monospace";
+    context.fillStyle = axis;
+    context.font = chartFont;
     context.textAlign = "right";
     context.fillText(axisLabel(value, metric), left - 8, y);
   }
 
   context.textBaseline = "top";
   const positions = new Set(
-    width < 460
-      ? [0, Math.floor((points.length - 1) / 2), points.length - 1]
-      : [
-          0,
-          Math.floor((points.length - 1) / 3),
-          Math.floor((2 * (points.length - 1)) / 3),
-          points.length - 1,
-        ],
+    span < 10 && width < 460
+      ? [0, points.length - 1]
+      : width < 460
+        ? [0, Math.floor((points.length - 1) / 2), points.length - 1]
+        : [
+            0,
+            Math.floor((points.length - 1) / 3),
+            Math.floor((2 * (points.length - 1)) / 3),
+            points.length - 1,
+          ],
   );
   for (const index of positions) {
     const start = index === 0;
     const end = index === points.length - 1;
     context.textAlign = start ? "left" : end ? "right" : "center";
-    context.fillStyle = "#7187a1";
-    context.font = "9px ui-monospace, monospace";
-    context.fillText(fmtClock(points[index].t), start ? left : end ? left + plotW : xFor(index), top + plotH + 9);
+    context.fillStyle = axis;
+    context.font = chartFont;
+    context.fillText(axisTime(points[index].t), start ? left : end ? left + plotW : xFor(index), top + plotH + 9);
   }
 
   for (const item of series) {
@@ -172,9 +201,9 @@ function draw() {
       context.lineTo(firstX, top + plotH);
       context.closePath();
       const gradient = context.createLinearGradient(0, top, 0, top + plotH);
-      gradient.addColorStop(0, "rgba(75,228,186,.16)");
-      gradient.addColorStop(1, "rgba(75,228,186,0)");
-      context.fillStyle = metric === "memory" ? "rgba(112,201,255,.10)" : gradient;
+      gradient.addColorStop(0, alpha(item.color, metric === "memory" ? 0.12 : 0.16));
+      gradient.addColorStop(1, alpha(item.color, 0));
+      context.fillStyle = gradient;
       context.fill();
     }
   }

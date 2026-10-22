@@ -15,6 +15,14 @@
   --cyan: #70c9ff;
   --amber: #ffc06d;
   --red: #ff7182;
+  --chart-1: #4be4ba;
+  --chart-2: #70c9ff;
+  --chart-3: #ffc06d;
+  --chart-fill: rgba(75, 228, 186, 0.08);
+  --chart-grid: rgba(38, 53, 74, 0.7);
+  --chart-baseline: rgba(58, 84, 106, 0.9);
+  --chart-axis: #7187a1;
+  --chart-font: 9px ui-monospace, monospace;
   --mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", ui-monospace, monospace;
   --sans: "Inter", "Segoe UI", "Noto Sans", system-ui, -apple-system, sans-serif;
   --r: 14px;
@@ -1267,6 +1275,14 @@ button:disabled {
 
 .view-control {
   margin-left: 2px;
+}
+
+.theme-switch {
+  margin-left: 2px;
+}
+
+.theme-switch .seg-btn {
+  font-size: 10px;
 }
 
 .filter-row {

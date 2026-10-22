@@ -209,6 +209,10 @@ GET  /api/v1/export?format=json|csv&dataset=sessions|events|actions
 - The SQLite data directory is created with `0700` permissions and the database file with `0600`.
 - This is not a security boundary against a malicious process running as the same user. For guaranteed cleanup, isolate each agent in a systemd service or cgroup.
 
+## Themes
+
+The original dark **Observatory** interface is the default. A light **Framed** theme is available from the top-bar switch; it was designed with the `design-taste-frontend` skill and uses a tinted frame, a white working sheet, IBM Plex type and a neutral chrome with teal data marks. The choice persists in `localStorage`; use `?theme=framed` to force it for a screenshot. See [`docs/THEMES.md`](docs/THEMES.md) for the direction, face and verification results.
+
 ## Upgrades and data
 
 The SQLite schema is versioned. Headless Watch refuses to open a database written by a newer build and keeps restart state within the supported schema version; back up `--data-dir` before downgrading.
