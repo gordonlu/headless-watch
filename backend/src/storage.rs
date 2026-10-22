@@ -2,7 +2,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -111,6 +111,8 @@ pub struct MetricPoint {
     pub quality: String,
 }
 
+const SCHEMA_VERSION: i64 = 1;
+
 pub struct Storage {
     conn: Connection,
     pub path: PathBuf,
@@ -129,6 +131,12 @@ impl Storage {
         let conn = Connection::open(&path)
             .with_context(|| format!("cannot open SQLite database {}", path.display()))?;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).ok();
+        let version: i64 = conn.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        if version > SCHEMA_VERSION {
+            bail!(
+                "database schema version {version} is newer than this build supports ({SCHEMA_VERSION}); upgrade Headless Watch"
+            );
+        }
         let _: String = conn.query_row("PRAGMA journal_mode=WAL", [], |row| row.get(0))?;
         conn.execute_batch(
             "PRAGMA synchronous=NORMAL;
@@ -233,9 +241,11 @@ impl Storage {
              CREATE TABLE IF NOT EXISTS settings (
                key TEXT PRIMARY KEY,
                value TEXT NOT NULL
-             );
-             PRAGMA user_version=1;",
+             );",
         )?;
+        if version < SCHEMA_VERSION {
+            conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+        }
         Ok(Self { conn, path })
     }
 
@@ -850,6 +860,17 @@ mod tests {
         let ended = storage.list_ended_sessions(10).expect("ended");
         assert_eq!(ended.len(), 1);
         assert_eq!(ended[0].source["launcher"], "OpenCode");
+    }
+
+    #[test]
+    fn refuses_a_newer_schema_version() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("headless-watch.db");
+        let conn = Connection::open(&path).expect("open");
+        conn.pragma_update(None, "user_version", 99i64)
+            .expect("set version");
+        drop(conn);
+        assert!(Storage::open(dir.path()).is_err());
     }
 
     #[test]

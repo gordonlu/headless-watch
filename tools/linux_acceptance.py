@@ -144,6 +144,8 @@ def start_server(binary: Path, port: int, web_dir: Path, data_dir: Path, log_pat
             "2",
             "--pss-interval",
             "15",
+            "--leftover-after",
+            "10",
         ],
         cwd=ROOT,
         stdin=subprocess.DEVNULL,
@@ -378,6 +380,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     fake: subprocess.Popen | None = None
     stress: subprocess.Popen | None = None
     chrome: subprocess.Popen | None = None
+    launcher: subprocess.Popen | None = None
+    lifecycle_profile = tempfile.TemporaryDirectory(prefix="hw-lifecycle-profile-")
     result: dict[str, object] = {"ok": False}
     try:
         server = start_server(binary, port, web_dir, data_dir, output_dir / "server.log")
@@ -486,7 +490,100 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 "recent_exited": True,
             }
 
-        # 3. Real 100-child browser tree (AT-18).
+        # 3. Real launcher exit lifecycle (AT-06).
+        chrome_binary = shutil.which("google-chrome") or shutil.which("chromium")
+        if not chrome_binary:
+            result["lifecycle"] = {"skipped": "Chrome/Chromium not installed"}
+        else:
+            pidfile = output_dir / "lifecycle-chrome.pid"
+            launcher_script = output_dir / "launcher.py"
+            launcher_script.write_text(
+                "import os, subprocess, time\n"
+                "chrome = os.environ['HW_CHROME']\n"
+                "profile = os.environ['HW_PROFILE']\n"
+                "pidfile = os.environ['HW_PIDFILE']\n"
+                "cmd = [chrome, '--headless=new', '--disable-gpu', '--disable-dev-shm-usage',\n"
+                "       '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0',\n"
+                "       '--user-data-dir=' + profile, 'about:blank']\n"
+                "p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "open(pidfile, 'w').write(str(p.pid))\n"
+                "while True: time.sleep(1)\n",
+                encoding="utf-8",
+            )
+            env = dict(os.environ)
+            env.update(
+                HW_CHROME=chrome_binary,
+                HW_PROFILE=lifecycle_profile.name,
+                HW_PIDFILE=str(pidfile),
+            )
+            launcher = subprocess.Popen(
+                [
+                    "bash",
+                    "-c",
+                    f"exec -a opencode {shutil.which('python3')} {launcher_script}",
+                ],
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            deadline = time.monotonic() + args.timeout
+            while time.monotonic() < deadline and not pidfile.exists():
+                if launcher.poll() is not None:
+                    raise AcceptanceFailure("opencode launcher exited before starting Chrome")
+                time.sleep(0.1)
+            if not pidfile.exists():
+                raise AcceptanceFailure("opencode launcher did not start Chrome")
+            lifecycle_pid = int(pidfile.read_text(encoding="utf-8"))
+            lifecycle_session = wait_for_session(base, token, lifecycle_pid, args.timeout)
+            if lifecycle_session.get("source", {}).get("launcher") != "OpenCode":
+                raise AcceptanceFailure(
+                    f"launcher ancestry was not OpenCode: {lifecycle_session.get('source')}"
+                )
+            os.kill(launcher.pid, signal.SIGKILL)
+            launcher.wait(timeout=5)
+            deadline = time.monotonic() + args.timeout
+            observed = None
+            while time.monotonic() < deadline:
+                status, _, payload, _ = http_json(base, "GET", "/api/v1/overview", token)
+                if status == 200:
+                    observed = next(
+                        (item for item in payload.get("sessions", []) if item.get("pid") == lifecycle_pid),
+                        None,
+                    )
+                    if observed and observed.get("status", {}).get("launcher_exited"):
+                        break
+                time.sleep(0.3)
+            if not observed or not observed.get("status", {}).get("launcher_exited"):
+                raise AcceptanceFailure("launcher exit was not observed")
+            deadline = time.monotonic() + args.timeout
+            while time.monotonic() < deadline:
+                status, _, payload, _ = http_json(base, "GET", "/api/v1/overview", token)
+                if status == 200:
+                    observed = next(
+                        (item for item in payload.get("sessions", []) if item.get("pid") == lifecycle_pid),
+                        None,
+                    )
+                    if observed and observed.get("status", {}).get("suspected_leftover"):
+                        break
+                time.sleep(0.5)
+            if not observed or not observed.get("status", {}).get("suspected_leftover"):
+                raise AcceptanceFailure("suspected leftover was not raised after the delay")
+            http_json(
+                base,
+                "POST",
+                f"/api/v1/sessions/{observed['id']}/terminate",
+                token,
+                {"identity": observed["identity"], "mode": "term", "confirm": True},
+            )
+            result["lifecycle"] = {
+                "launcher": observed.get("source", {}).get("launcher"),
+                "launcher_exited": True,
+                "suspected_leftover": True,
+            }
+
+        # 4. Real 100-child browser tree (AT-18).
         if fake_binary is None:
             result["stress_100"] = {"skipped": "cc/gcc not available"}
         else:
@@ -594,10 +691,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         result["ok"] = True
         return result
     finally:
-        for process in (fake, stress, chrome, server):
+        for process in (fake, stress, chrome, launcher, server):
             if process is not None:
                 terminate_group(process)
         profile.cleanup()
+        lifecycle_profile.cleanup()
         shutil.rmtree(data_dir, ignore_errors=True)
 
 

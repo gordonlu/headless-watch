@@ -18,7 +18,7 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 
 | ID | Status | Evidence |
 |---|---|---|
-| AT-06 launcher/parent exit keeps source history | Done | tracker tests for launcher exit, parent exit, suspected leftover; SQLite persistence |
+| AT-06 launcher/parent exit keeps source history | Done | tracker tests plus a real OpenCode-named parent + Chrome run: launcher exit and suspected leftover observed and persisted |
 | AT-07 pre-existing browser reports Unknown origin | Done | tracker pre-existing test |
 | AT-08 CDP tabs and on-demand screenshot | Done | Rust smoke screenshot endpoint and Browser tab |
 | AT-12 history survives restart; UI reconnects | Done | Rust smoke restart, active rehydration, SSE reconnect |
@@ -42,8 +42,8 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 - [x] Add `headless-watch start/status/stop/open` CLI commands (PRD FR-09).
 - [x] Notification click-through opens the related session Inspector (PRD FR-07); depends on desktop notification action support.
 - [x] Service log rate limiting via systemd journald plus `status` version/health reporting (PRD FR-09).
-- [ ] Update/upgrade state restoration beyond the current SQLite schema version.
-- [ ] Run one full real OpenCode + Playwright MCP lifecycle against the Rust backend: normal exit, forced interrupt, agent exit with browser alive, CDP available and unavailable.
+- [x] SQLite schema version guard and restart state restoration; future schema migrations remain additive work.
+- [ ] Run one full real OpenCode + Playwright MCP lifecycle against the Rust backend. OpenCode-named parent → Chrome exit/suspected-leftover is covered; the Playwright MCP middle layer and forced-interrupt variants remain.
 - [ ] Repeatable performance benchmark with a target under 1% of one logical core (current samples are ~1.0-1.4%).
 - [ ] Publish the release archive and tag the version.
 - [ ] Optional, non-blocking: tray icon.

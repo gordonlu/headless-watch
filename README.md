@@ -209,6 +209,10 @@ GET  /api/v1/export?format=json|csv&dataset=sessions|events|actions
 - The SQLite data directory is created with `0700` permissions and the database file with `0600`.
 - This is not a security boundary against a malicious process running as the same user. For guaranteed cleanup, isolate each agent in a systemd service or cgroup.
 
+## Upgrades and data
+
+The SQLite schema is versioned. Headless Watch refuses to open a database written by a newer build and keeps restart state within the supported schema version; back up `--data-dir` before downgrading.
+
 ## Logging
 
 When installed as a user service, logs go to journald and are rate-limited by the unit (`LogRateLimitIntervalSec=30s`, `LogRateLimitBurst=200`):
