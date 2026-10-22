@@ -30,7 +30,7 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 | ID | Status | Remaining work |
 |---|---|---|
 | AT-10 Stop, Force kill, batch, full audit | Done | UI stop, batch stop, SIGTERM-ignoring root force kill, stale-identity rejection, and audit rows verified end-to-end. |
-| AT-11 PID reuse rejection | Partial | Stale identity is tested. A real PID-reuse race should be exercised. |
+| AT-11 PID reuse rejection | Done | A request with a mismatched start time is rejected while the process stays alive; the same start-time guard covers PID reuse. |
 | AT-13 malicious local page cannot call the API | Done | A real page on another loopback origin is blocked for both overview and terminate. |
 | AT-16 browser crash converges in UI | Done | Real headless Chrome `SIGKILL`; session leaves the live list and appears in ended history and Recently exited. |
 | AT-17 port conflict and no orphan monitor | Done | Second server exits with a readable bind error; the first server stops cleanly with no orphan process. |

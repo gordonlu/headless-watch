@@ -398,6 +398,21 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 start_new_session=True,
             )
             session = wait_for_session(base, token, fake.pid, args.timeout)
+            stale_identity = dict(session["identity"])
+            stale_identity["start_ticks"] = int(stale_identity["start_ticks"]) + 1
+            stale_status, _, stale_body, _ = http_json(
+                base,
+                "POST",
+                f"/api/v1/sessions/{session['id']}/terminate",
+                token,
+                {"identity": stale_identity, "mode": "term", "confirm": True},
+            )
+            if stale_status != 409 or (stale_body or {}).get("ok") is not False:
+                raise AcceptanceFailure(
+                    f"stale identity was not rejected: {stale_status} {stale_body}"
+                )
+            if fake.poll() is not None:
+                raise AcceptanceFailure("stale identity request terminated the process")
             term_status, _, term_body, _ = http_json(
                 base,
                 "POST",
@@ -422,6 +437,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             status, _, actions, _ = http_json(base, "GET", "/api/v1/actions?limit=50", token)
             rows = (actions or {}).get("actions", [])
             result["force_kill"] = {
+                "stale_identity_rejected": True,
                 "term": next((row.get("result") for row in rows if row.get("action") == "term"), None),
                 "kill": next((row.get("result") for row in rows if row.get("action") == "kill"), None),
             }
