@@ -25,9 +25,13 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
+
+import websocket
 
 ROOT = Path(__file__).resolve().parents[1]
 OPEN = build_opener(ProxyHandler({}))
@@ -171,7 +175,19 @@ def compile_fake_browser(directory: Path) -> Path | None:
     source = directory / "fake_chrome.c"
     binary = directory / "chrome"
     source.write_text(
-        "#include <signal.h>\n#include <unistd.h>\nint main(void){signal(SIGTERM, SIG_IGN); for(;;){pause();}}\n",
+        "#include <signal.h>\n"
+        "#include <stdlib.h>\n"
+        "#include <string.h>\n"
+        "#include <unistd.h>\n"
+        "int main(int argc, char **argv){\n"
+        "  int children = 0;\n"
+        "  for (int i = 1; i < argc; i++) {\n"
+        "    if (!strncmp(argv[i], \"--children=\", 11)) children = atoi(argv[i] + 11);\n"
+        "  }\n"
+        "  signal(SIGTERM, SIG_IGN);\n"
+        "  for (int i = 0; i < children; i++) { if (fork() == 0) { for(;;) pause(); } }\n"
+        "  for(;;){pause();}\n"
+        "}\n",
         encoding="utf-8",
     )
     result = subprocess.run([compiler, "-O2", "-o", str(binary), str(source)], capture_output=True, text=True)
@@ -216,6 +232,137 @@ def process_rss_kib(pid: int) -> int:
     return 0
 
 
+def run_cross_site_test(
+    watch_base: str,
+    watch_port: int,
+    chrome_binary: str | None,
+    timeout: float,
+) -> dict[str, object]:
+    if not chrome_binary:
+        return {"skipped": "Chrome/Chromium not installed"}
+    attacker_port_holder: dict[str, int] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            watch = watch_base
+            page = f"""<!doctype html><html><body><script>
+window.results = {{}};
+fetch('{watch}/api/v1/overview')
+  .then(r => {{ window.results.overview = r.status; }})
+  .catch(() => {{ window.results.overview = 'blocked'; }});
+fetch('{watch}/api/v1/sessions/victim/terminate', {{
+  method: 'POST',
+  headers: {{ 'Content-Type': 'application/json' }},
+  body: JSON.stringify({{ identity: {{ pid: 1, start_ticks: 1 }}, mode: 'term', confirm: true }})
+}})
+  .then(r => {{ window.results.terminate = r.status; }})
+  .catch(() => {{ window.results.terminate = 'blocked'; }});
+</script></body></html>"""
+            data = page.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *_: object) -> None:
+            return
+
+    attacker = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    attacker_port_holder["port"] = attacker.server_address[1]
+    thread = threading.Thread(target=attacker.serve_forever, daemon=True)
+    thread.start()
+    profile = tempfile.TemporaryDirectory(prefix="hw-cross-site-profile-")
+    chrome: subprocess.Popen | None = None
+    ws = None
+    try:
+        chrome = subprocess.Popen(
+            [
+                chrome_binary,
+                "--headless=new",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--remote-debugging-port=0",
+                f"--user-data-dir={profile.name}",
+                "about:blank",
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        port_file = Path(profile.name, "DevToolsActivePort")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline and not port_file.exists():
+            if chrome.poll() is not None:
+                raise AcceptanceFailure("cross-site Chrome exited before exposing CDP")
+            time.sleep(0.1)
+        cdp_port = int(port_file.read_text(encoding="ascii").splitlines()[0])
+        targets = json.loads(
+            OPEN.open(f"http://127.0.0.1:{cdp_port}/json/list", timeout=2).read()
+        )
+        page_target = next((item for item in targets if item.get("type") == "page"), None)
+        if not page_target:
+            raise AcceptanceFailure("cross-site Chrome exposed no page target")
+        ws = websocket.create_connection(
+            str(page_target["webSocketDebuggerUrl"]).replace("localhost", "127.0.0.1"),
+            timeout=5,
+            suppress_origin=True,
+            http_proxy_host=None,
+        )
+        ws.settimeout(0.25)
+        request_id = iter(range(1, 10000))
+
+        def command(method: str, params: dict | None = None) -> dict:
+            cid = next(request_id)
+            ws.send(json.dumps({"id": cid, "method": method, "params": params or {}}))
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                try:
+                    message = json.loads(ws.recv())
+                except websocket.WebSocketTimeoutException:
+                    continue
+                if message.get("id") == cid:
+                    if "error" in message:
+                        raise AcceptanceFailure(f"CDP {method}: {message['error']}")
+                    return message.get("result", {})
+            raise AcceptanceFailure(f"CDP {method} timed out")
+
+        command("Runtime.enable")
+        command("Page.enable")
+        command("Page.navigate", {"url": f"http://127.0.0.1:{attacker_port_holder['port']}/"})
+        results: dict[str, object] = {}
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            evaluation = command(
+                "Runtime.evaluate",
+                {
+                    "expression": "JSON.stringify(window.results || {})",
+                    "returnByValue": True,
+                },
+            )
+            results = json.loads(evaluation["result"].get("value") or "{}")
+            if "overview" in results and "terminate" in results:
+                break
+            time.sleep(0.2)
+        if results.get("overview") != "blocked" or results.get("terminate") != "blocked":
+            raise AcceptanceFailure(f"cross-site page was not fully blocked: {results}")
+        return {"attacker_origin": f"http://127.0.0.1:{attacker_port_holder['port']}", "results": results}
+    finally:
+        if ws is not None:
+            try:
+                ws.close()
+            except Exception:
+                pass
+        if chrome is not None:
+            terminate_group(chrome)
+        profile.cleanup()
+        attacker.shutdown()
+        attacker.server_close()
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     binary = resolve_binary(args.binary)
     web_dir = (Path(args.web_dir) if args.web_dir else ROOT / "frontend/dist").resolve()
@@ -229,6 +376,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     base = f"http://127.0.0.1:{port}"
     server: subprocess.Popen | None = None
     fake: subprocess.Popen | None = None
+    stress: subprocess.Popen | None = None
     chrome: subprocess.Popen | None = None
     result: dict[str, object] = {"ok": False}
     try:
@@ -322,7 +470,68 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 "recent_exited": True,
             }
 
-        # 3. Resource sample while the server is monitoring.
+        # 3. Real 100-child browser tree (AT-18).
+        if fake_binary is None:
+            result["stress_100"] = {"skipped": "cc/gcc not available"}
+        else:
+            stress = subprocess.Popen(
+                [
+                    str(fake_binary),
+                    "--headless=new",
+                    "--remote-debugging-pipe",
+                    "--children=100",
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            stress_session = None
+            deadline = time.monotonic() + args.timeout
+            while time.monotonic() < deadline:
+                status, _, payload, _ = http_json(base, "GET", "/api/v1/overview", token)
+                if status == 200:
+                    candidate = next(
+                        (item for item in payload.get("sessions", []) if item.get("pid") == stress.pid),
+                        None,
+                    )
+                    if candidate and candidate.get("process_count", 0) >= 100:
+                        stress_session = candidate
+                        break
+                time.sleep(0.3)
+            if stress_session is None:
+                raise AcceptanceFailure("the 100-child browser tree was not discovered with 100 processes")
+            latencies = []
+            for _ in range(10):
+                started = time.monotonic()
+                http_json(base, "GET", "/api/v1/overview", token)
+                latencies.append((time.monotonic() - started) * 1000.0)
+            before = process_cpu_ticks(server.pid)
+            started = time.monotonic()
+            time.sleep(5.0)
+            after = process_cpu_ticks(server.pid)
+            elapsed = max(0.001, time.monotonic() - started)
+            ticks = (after[0] + after[1]) - (before[0] + before[1])
+            clk = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+            kill_status, _, kill_body, _ = http_json(
+                base,
+                "POST",
+                f"/api/v1/sessions/{stress_session['id']}/terminate",
+                token,
+                {"identity": stress_session["identity"], "mode": "kill", "confirm": True},
+            )
+            stress.wait(timeout=8)
+            if kill_status != 200 or not (kill_body or {}).get("ok"):
+                raise AcceptanceFailure(f"stress force kill failed: {kill_status} {kill_body}")
+            result["stress_100"] = {
+                "process_count": stress_session.get("process_count"),
+                "overview_max_ms": round(max(latencies), 1),
+                "overview_avg_ms": round(sum(latencies) / len(latencies), 1),
+                "cpu_single_core_pct": round(ticks / clk / elapsed * 100.0, 3),
+                "rss_mib": round(process_rss_kib(server.pid) / 1024.0, 2),
+            }
+
+        # 4. Resource sample while the server is monitoring.
         before = process_cpu_ticks(server.pid)
         started = time.monotonic()
         time.sleep(5.0)
@@ -336,10 +545,18 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "elapsed_s": round(elapsed, 2),
         }
 
+        # 5. Cross-site page attempt (AT-13).
+        result["cross_site"] = run_cross_site_test(
+            base,
+            port,
+            shutil.which("google-chrome") or shutil.which("chromium"),
+            args.timeout,
+        )
+
         terminate_group(server)
         server = None
 
-        # 4. Port conflict: the first server is stopped, so start two on one port.
+        # 6. Port conflict: the first server is stopped, so start two on one port.
         conflict_port = free_port()
         first = start_server(binary, conflict_port, web_dir, data_dir, output_dir / "conflict-first.log")
         conflict_base = f"http://127.0.0.1:{conflict_port}"
@@ -361,7 +578,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         result["ok"] = True
         return result
     finally:
-        for process in (fake, chrome, server):
+        for process in (fake, stress, chrome, server):
             if process is not None:
                 terminate_group(process)
         profile.cleanup()

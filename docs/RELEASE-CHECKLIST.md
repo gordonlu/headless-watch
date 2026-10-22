@@ -29,12 +29,12 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 
 | ID | Status | Remaining work |
 |---|---|---|
-| AT-10 Stop, Force kill, batch, full audit | Partial | Stop, batch, and audit are tested end-to-end. Force kill needs a real surviving-root scenario. |
+| AT-10 Stop, Force kill, batch, full audit | Done | UI stop, batch stop, SIGTERM-ignoring root force kill, stale-identity rejection, and audit rows verified end-to-end. |
 | AT-11 PID reuse rejection | Partial | Stale identity is tested. A real PID-reuse race should be exercised. |
-| AT-13 malicious local page cannot call the API | Partial | Host/Origin/token/content-type tests exist. Add a real cross-site browser attempt. |
-| AT-16 browser crash converges in UI | Partial | Tracker unit test covers root disappearance. Add a real `SIGKILL` crash run. |
-| AT-17 port conflict and no orphan monitor | Partial | CLI returns a readable bind error; add an automated port-conflict/no-orphan test. |
-| AT-18 100 browser child processes stay responsive | Partial | 100-process tracker stress test passes. Add a real browser tree and measure backend CPU/RSS and UI latency. |
+| AT-13 malicious local page cannot call the API | Done | A real page on another loopback origin is blocked for both overview and terminate. |
+| AT-16 browser crash converges in UI | Done | Real headless Chrome `SIGKILL`; session leaves the live list and appears in ended history and Recently exited. |
+| AT-17 port conflict and no orphan monitor | Done | Second server exits with a readable bind error; the first server stops cleanly with no orphan process. |
+| AT-18 100 browser child processes stay responsive | Done | Real 101-process tree: overview max ~1-3ms, backend RSS ~13 MiB. |
 
 ## Other v1.0 items
 
@@ -43,6 +43,7 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 - [ ] Notification click-through into the related session detail (PRD FR-07).
 - [ ] Log size limit and update-state reporting (PRD FR-09).
 - [ ] Run one full real OpenCode + Playwright MCP lifecycle against the Rust backend: normal exit, forced interrupt, agent exit with browser alive, CDP available and unavailable.
+- [ ] Repeatable performance benchmark with a target under 1% of one logical core (current samples are ~1.0-1.4%).
 - [ ] Publish the release archive and tag the version.
 - [ ] Optional, non-blocking: tray icon.
 
