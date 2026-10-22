@@ -55,13 +55,14 @@ function riskClass(session: SessionView): string {
       <section class="scope-panel radar-panel" aria-labelledby="radar-title">
         <header class="scope-panel-head">
           <h2 id="radar-title">Signal field</h2>
-          <span>radius / processes · angle / session</span>
+          <span>distance / CPU · size / processes · angle / session</span>
         </header>
         <RadarScope :sessions="sessions" />
         <footer class="scope-panel-foot">
           <span class="scope-legend-item"><i class="scope-dot opencode"></i>OpenCode</span>
           <span class="scope-legend-item"><i class="scope-dot codex"></i>Codex</span>
           <span class="scope-legend-item"><i class="scope-dot unknown"></i>Unknown</span>
+          <span class="scope-foot-note">closer centre = higher CPU</span>
         </footer>
       </section>
 

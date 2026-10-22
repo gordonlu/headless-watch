@@ -47,7 +47,7 @@ function draw(timestamp: number) {
 
   if (started === 0) started = timestamp;
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const sweep = reduced ? Math.PI * 0.18 : ((timestamp - started) / 4200) % (Math.PI * 2);
+  const sweep = reduced ? Math.PI * 0.18 : ((timestamp - started) / 1800) % (Math.PI * 2);
 
   const halo = ctx.createRadialGradient(cx, cy, radius * 0.2, cx, cy, radius);
   halo.addColorStop(0, "rgba(13, 26, 29, 0.1)");
@@ -57,14 +57,14 @@ function draw(timestamp: number) {
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.strokeStyle = "#1a2b30";
+  ctx.strokeStyle = "#2a444a";
   ctx.lineWidth = 1;
   for (let ring = 1; ring <= 4; ring += 1) {
     ctx.beginPath();
     ctx.arc(cx, cy, (radius * ring) / 4, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.strokeStyle = "rgba(44, 70, 74, 0.55)";
+  ctx.strokeStyle = "rgba(72, 110, 116, 0.7)";
   for (let spoke = 0; spoke < 12; spoke += 1) {
     const angle = (spoke / 12) * Math.PI * 2;
     ctx.beginPath();
@@ -75,15 +75,15 @@ function draw(timestamp: number) {
 
   if (!reduced) {
     const cone = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    cone.addColorStop(0, "rgba(89, 247, 255, 0.15)");
+    cone.addColorStop(0, "rgba(89, 247, 255, 0.22)");
     cone.addColorStop(1, "rgba(89, 247, 255, 0)");
     ctx.fillStyle = cone;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, sweep - 0.42, sweep);
+    ctx.arc(cx, cy, radius, sweep - 1.05, sweep);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = "rgba(89, 247, 255, 0.48)";
+    ctx.strokeStyle = "rgba(89, 247, 255, 0.78)";
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(cx + Math.cos(sweep) * radius, cy + Math.sin(sweep) * radius);
@@ -99,6 +99,7 @@ function draw(timestamp: number) {
   ctx.stroke();
 
   const maxProcesses = Math.max(...props.sessions.map((session) => session.process_count), 1);
+  const maxCpu = Math.max(...props.sessions.map((session) => session.cpu.cores ?? 0), 0.01);
   const usedAngles: number[] = [];
   for (const session of props.sessions) {
     let angle = angleFor(session.id);
@@ -111,13 +112,14 @@ function draw(timestamp: number) {
       guard += 1;
     }
     usedAngles.push(angle);
-    const scale = 0.18 + 0.72 * (session.process_count / maxProcesses);
+    const load = Math.min(1, Math.max(0, (session.cpu.cores ?? 0) / maxCpu));
+    const scale = 0.18 + 0.72 * (1 - load);
     const x = cx + Math.cos(angle) * radius * scale;
     const y = cy + Math.sin(angle) * radius * scale;
     const color = sourceColor(session);
-    const size = 3 + Math.min(4, (session.cpu.cores ?? 0) * 2);
+    const size = 3.5 + Math.min(5, (session.process_count / maxProcesses) * 5);
     ctx.shadowColor = color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 14;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -129,16 +131,20 @@ function draw(timestamp: number) {
     ctx.arc(x, y, size + 4, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#c8d2d5";
-    ctx.font = '10px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillStyle = "#edf8fa";
+    ctx.font = '12px "IBM Plex Mono", ui-monospace, monospace';
     ctx.textAlign = "left";
-    ctx.fillText(`P${session.pid}`, x + 9, y + 3);
+    ctx.fillText(`P${session.pid}`, x + 10, y + 4);
   }
 
-  ctx.fillStyle = "#71878c";
-  ctx.font = '10px "IBM Plex Mono", ui-monospace, monospace';
+  ctx.fillStyle = "#a9bcc0";
+  ctx.font = '12px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textAlign = "center";
-  ctx.fillText(`${props.sessions.length} SIGNALS`, cx, cy + radius + 16);
+  ctx.fillText(
+    `${props.sessions.length} ${props.sessions.length === 1 ? "SIGNAL" : "SIGNALS"}`,
+    cx,
+    cy + radius + 18,
+  );
   if (!props.sessions.length) {
     ctx.fillStyle = "#59f7ff";
     ctx.font = '12px "IBM Plex Mono", ui-monospace, monospace';

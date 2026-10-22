@@ -12,7 +12,7 @@ The original dark console: deep-blue ground, mint/cyan telemetry, session cards 
 - **Move**: a 64px icon rail, a radar signal field, a dense signal log with an embedded CPU trace and event trace, and a single wide signal-history scope. Every selection is a 1px accent line; figures use tabular monospace; there are no cards-in-a-grid ornaments.
 - **Face**: Public Sans for interface text and IBM Plex Mono for figures, IDs and timestamps. Fonts are self-hosted under `frontend/src/assets/fonts/` (licences included).
 - **Data hues**: CPU is white ink, machine share is blue (`#4a8ad6`), memory is blue/grey; red is reserved for alerts and negative status. Chrome stays neutral.
-- **Signature elements**: the radar signal field (radius = process count, angle = session identity, colour = launcher), the signal log + live event trace, the CPU trace strip, and the oversized telemetry readout strip. Radar/monitoring views are canvas; the CPU strip is real SVG data.
+- **Signature elements**: the radar signal field (distance = CPU load, closer centre = higher; size = process count; angle = session identity; colour = launcher), the signal log + live event trace, the CPU trace strip, and the oversized telemetry readout strip. The sweep runs at 1.8s per revolution with a 60° trail. Radar/monitoring views are canvas; the CPU strip is real SVG data.
 - **Screens covered**: overview, live sessions/list, history, alerts, settings, and the session inspector/dialogs.
 
 ## Switching
@@ -25,7 +25,7 @@ http://127.0.0.1:8765/?theme=terminal
 
 ## Verification
 
-- `design-taste-frontend` `inspect.mjs --app` at 1440, 768 and 390: **no FAILs**. One density WARN remains (67% of text under 13px), accepted deliberately for the operator-console density.
+- `design-taste-frontend` `inspect.mjs --app` at 1440, 768 and 390: **no FAILs**. One WARN remains for an empty band in the signal log when only one or two sessions exist; this is the honest empty-log state, not hidden data.
 - Default Observatory smoke test passes, including Inspector, deep links, screenshots, alerts, stop flow and restart.
 
 `lint.mjs --app` on the whole frontend still reports the intentional patterns of the original dark theme. The Terminal experience deliberately departs from the skill's quiet-app defaults; it was checked for layout and rendering in a real browser, with one accepted density warning. The new theme is isolated in `frontend/src/theme-terminal.css` and `TerminalOverview.vue`.
