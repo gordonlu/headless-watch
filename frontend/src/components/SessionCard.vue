@@ -136,8 +136,8 @@ function keydown(event: KeyboardEvent) {
       <span class="spark-label">CPU · last 2 min</span>
       <svg v-if="spark.length > 1" class="spark" viewBox="0 0 100 30" preserveAspectRatio="none">
         <line v-for="line in [6, 13, 20, 27]" :key="line" x1="0" x2="100" :y1="line" :y2="line" stroke="var(--chart-grid)" stroke-width="0.5" />
-        <polygon :points="sparkArea" fill="var(--chart-fill)" />
-        <polyline :points="sparkLine" fill="none" stroke="var(--chart-1)" stroke-width="1.4" vector-effect="non-scaling-stroke" />
+        <polygon :points="sparkArea" fill="var(--spark-fill)" />
+        <polyline :points="sparkLine" fill="none" stroke="var(--spark)" stroke-width="1.4" vector-effect="non-scaling-stroke" />
       </svg>
       <div v-else class="spark-empty">Collecting samples</div>
       <div class="spark-foot">

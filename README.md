@@ -211,7 +211,7 @@ GET  /api/v1/export?format=json|csv&dataset=sessions|events|actions
 
 ## Themes
 
-The original dark **Observatory** interface is the default. A light **Framed** theme is available from the top-bar switch; it was designed with the `design-taste-frontend` skill and uses a tinted frame, a white working sheet, IBM Plex type and a neutral chrome with teal data marks. The choice persists in `localStorage`; use `?theme=framed` to force it for a screenshot. See [`docs/THEMES.md`](docs/THEMES.md) for the direction, face and verification results.
+The original dark **Observatory** interface is the default. A second **Terminal** theme is available from the top-bar switch; it was designed with the `design-taste-frontend` skill and uses a dark instrument-panel layout, Public Sans with IBM Plex Mono figures, 1px accent selection lines and restrained data hues. The choice persists in `localStorage`; use `?theme=terminal` to force it for a screenshot. See [`docs/THEMES.md`](docs/THEMES.md) for the direction, face and verification results.
 
 ## Upgrades and data
 

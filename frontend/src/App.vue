@@ -16,7 +16,7 @@ import InspectorDrawer from "./components/InspectorDrawer.vue";
 const pages: PageName[] = ["overview", "live", "history", "alerts", "settings"];
 const page = ref<PageName>(readPage().page);
 const refreshing = ref(false);
-type Theme = "default" | "framed";
+type Theme = "default" | "terminal";
 const theme = ref<Theme>(readTheme());
 
 const titles: Record<PageName, string> = {
@@ -54,12 +54,12 @@ const runtime = computed(() => {
 
 function readTheme(): Theme {
   const query = new URLSearchParams(window.location.search).get("theme");
-  if (query === "framed" || query === "default") return query;
-  return localStorage.getItem("hw-theme") === "framed" ? "framed" : "default";
+  if (query === "terminal" || query === "default") return query;
+  return localStorage.getItem("hw-theme") === "terminal" ? "terminal" : "default";
 }
 
 function applyTheme(value: Theme, persist = true) {
-  document.documentElement.dataset.theme = value === "framed" ? "framed" : "";
+  document.documentElement.dataset.theme = value === "terminal" ? "terminal" : "";
   if (persist) localStorage.setItem("hw-theme", value);
 }
 
@@ -211,7 +211,7 @@ onMounted(() => {
           </span>
           <div class="seg-control theme-switch" role="group" aria-label="Interface theme">
             <button class="seg-btn" :class="{ 'is-active': theme === 'default' }" type="button" @click="setTheme('default')">Observatory</button>
-            <button class="seg-btn" :class="{ 'is-active': theme === 'framed' }" type="button" @click="setTheme('framed')">Framed</button>
+            <button class="seg-btn" :class="{ 'is-active': theme === 'terminal' }" type="button" @click="setTheme('terminal')">Terminal</button>
           </div>
           <button class="ghost-btn" type="button" :disabled="refreshing" @click="refresh">
             {{ refreshing ? "Refreshing…" : "Refresh" }}
