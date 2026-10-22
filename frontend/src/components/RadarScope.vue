@@ -74,20 +74,36 @@ function draw(timestamp: number) {
   }
 
   if (!reduced) {
-    const cone = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    cone.addColorStop(0, "rgba(89, 247, 255, 0.22)");
-    cone.addColorStop(1, "rgba(89, 247, 255, 0)");
-    ctx.fillStyle = cone;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, radius, sweep - 1.05, sweep);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(89, 247, 255, 0.78)";
+    const trail = 1.05;
+    // PPI afterglow fades by angle behind the beam, not by distance from the
+    // centre. A conic gradient gives the real radar trail instead of a glowing
+    // triangular fill that is brightest at the origin.
+    if (typeof ctx.createConicGradient === "function") {
+      const cone = ctx.createConicGradient(sweep - trail, cx, cy);
+      cone.addColorStop(0, "rgba(89, 247, 255, 0)");
+      cone.addColorStop(0.05, "rgba(89, 247, 255, 0.04)");
+      cone.addColorStop(0.12, "rgba(89, 247, 255, 0.16)");
+      cone.addColorStop(0.158, "rgba(89, 247, 255, 0.34)");
+      cone.addColorStop(0.172, "rgba(89, 247, 255, 0.14)");
+      cone.addColorStop(0.2, "rgba(89, 247, 255, 0)");
+      cone.addColorStop(1, "rgba(89, 247, 255, 0)");
+      ctx.fillStyle = cone;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, sweep - trail, sweep);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.strokeStyle = "rgba(137, 255, 255, 0.98)";
+    ctx.lineWidth = 1.6;
+    ctx.shadowColor = "#59f7ff";
+    ctx.shadowBlur = 12;
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.lineTo(cx + Math.cos(sweep) * radius, cy + Math.sin(sweep) * radius);
     ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.lineWidth = 1;
   }
 
   ctx.strokeStyle = "rgba(89, 247, 255, 0.28)";
@@ -118,8 +134,10 @@ function draw(timestamp: number) {
     const y = cy + Math.sin(angle) * radius * scale;
     const color = sourceColor(session);
     const size = 3.5 + Math.min(5, (session.process_count / maxProcesses) * 5);
+    const angularDistance = Math.abs(Math.atan2(Math.sin(sweep - angle), Math.cos(sweep - angle)));
+    const afterglow = Math.max(0, 1 - angularDistance / 1.2);
     ctx.shadowColor = color;
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = 8 + afterglow * 18;
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
