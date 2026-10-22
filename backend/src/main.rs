@@ -5,7 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::{Args, Parser, Subcommand};
 use headless_watch::cdp::probe_tabs;
 use headless_watch::core::{resolve_web_dir, Core, PssResult};
 use headless_watch::model::VERSION;
@@ -18,6 +18,32 @@ use tracing_subscriber::EnvFilter;
 #[derive(Debug, Parser)]
 #[command(name = "headless-watch", version = VERSION)]
 struct Cli {
+    #[command(subcommand)]
+    command: Option<Command>,
+    #[command(flatten)]
+    serve: ServeArgs,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Start the installed systemd user service.
+    Start,
+    /// Show service or local HTTP health.
+    Status {
+        #[arg(long, default_value_t = 8765)]
+        port: u16,
+    },
+    /// Stop the installed systemd user service.
+    Stop,
+    /// Open the dashboard in the desktop browser.
+    Open {
+        #[arg(long, default_value_t = 8765)]
+        port: u16,
+    },
+}
+
+#[derive(Debug, Args)]
+struct ServeArgs {
     #[arg(long, default_value_t = 8765, value_parser = clap::value_parser!(u16).range(1..))]
     port: u16,
     #[arg(long)]
@@ -50,7 +76,7 @@ fn default_data_dir() -> Result<PathBuf> {
     Ok(PathBuf::from(home).join(".local/share/headless-watch"))
 }
 
-fn apply_cli_settings(cli: &Cli, settings: &mut Settings) {
+fn apply_cli_settings(cli: &ServeArgs, settings: &mut Settings) {
     if let Some(value) = cli.interval {
         settings.interval_s = value;
     }
@@ -76,6 +102,104 @@ fn apply_cli_settings(cli: &Cli, settings: &mut Settings) {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    if let Some(command) = cli.command {
+        return run_command(command);
+    }
+    run_server(cli.serve)
+}
+
+fn run_command(command: Command) -> Result<()> {
+    match command {
+        Command::Start => {
+            let status = std::process::Command::new("systemctl")
+                .args(["--user", "start", "headless-watch.service"])
+                .status()
+                .context("systemctl is not available")?;
+            if !status.success() {
+                anyhow::bail!(
+                    "could not start headless-watch.service; run install.sh first or check `systemctl --user status headless-watch`"
+                );
+            }
+            println!("Headless Watch service start requested.");
+            Ok(())
+        }
+        Command::Stop => {
+            let status = std::process::Command::new("systemctl")
+                .args(["--user", "stop", "headless-watch.service"])
+                .status()
+                .context("systemctl is not available")?;
+            if !status.success() {
+                anyhow::bail!("could not stop headless-watch.service");
+            }
+            println!("Headless Watch service stop requested.");
+            Ok(())
+        }
+        Command::Status { port } => {
+            if let Some(health) = local_health(port) {
+                println!(
+                    "Headless Watch is running at http://127.0.0.1:{port} (status: {}, active sessions: {}, version: {})",
+                    health.0, health.2, health.1
+                );
+                return Ok(());
+            }
+            let output = std::process::Command::new("systemctl")
+                .args(["--user", "status", "--no-pager", "headless-watch.service"])
+                .output();
+            match output {
+                Ok(result) if result.status.success() => {
+                    print!("{}", String::from_utf8_lossy(&result.stdout));
+                    Ok(())
+                }
+                _ => {
+                    println!("Headless Watch is not running on 127.0.0.1:{port} and no user service was found.");
+                    Ok(())
+                }
+            }
+        }
+        Command::Open { port } => {
+            let url = format!("http://127.0.0.1:{port}");
+            match std::process::Command::new("xdg-open").arg(&url).status() {
+                Ok(status) if status.success() => Ok(()),
+                _ => {
+                    println!("Open {url}");
+                    Ok(())
+                }
+            }
+        }
+    }
+}
+
+fn local_health(port: u16) -> Option<(String, String, i64)> {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+    use std::time::Duration;
+    let address = format!("127.0.0.1:{port}").parse().ok()?;
+    let mut stream = TcpStream::connect_timeout(&address, Duration::from_millis(500)).ok()?;
+    stream
+        .set_read_timeout(Some(Duration::from_millis(800)))
+        .ok()?;
+    stream
+        .write_all(
+            format!("GET /api/v1/health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n")
+                .as_bytes(),
+        )
+        .ok()?;
+    let mut data = Vec::new();
+    stream.read_to_end(&mut data).ok()?;
+    let text = String::from_utf8_lossy(&data);
+    if !text.starts_with("HTTP/1.1 200") && !text.starts_with("HTTP/1.0 200") {
+        return None;
+    }
+    let body = text.split("\r\n\r\n").nth(1).unwrap_or("");
+    let parsed: serde_json::Value = serde_json::from_str(body).ok()?;
+    Some((
+        parsed.get("status")?.as_str()?.to_string(),
+        parsed.get("version")?.as_str()?.to_string(),
+        parsed.get("active_sessions")?.as_i64().unwrap_or(0),
+    ))
+}
+
+fn run_server(cli: ServeArgs) -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             EnvFilter::new(if cli.verbose {
@@ -282,5 +406,24 @@ fn side_loop(state: AppState, stop: Arc<AtomicBool>) {
             next_cdp = Instant::now() + Duration::from_secs_f64(cdp_interval.max(2.0));
         }
         thread::sleep(Duration::from_millis(250));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_serve_flags_and_subcommands() {
+        let cli = Cli::try_parse_from(["headless-watch", "--port", "9100"]).expect("serve");
+        assert_eq!(cli.serve.port, 9100);
+        assert!(cli.command.is_none());
+
+        let cli =
+            Cli::try_parse_from(["headless-watch", "status", "--port", "9000"]).expect("status");
+        assert!(matches!(cli.command, Some(Command::Status { port: 9000 })));
+
+        let cli = Cli::try_parse_from(["headless-watch", "start"]).expect("start");
+        assert!(matches!(cli.command, Some(Command::Start)));
     }
 }

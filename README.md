@@ -209,9 +209,14 @@ GET  /api/v1/export?format=json|csv&dataset=sessions|events|actions
 - The SQLite data directory is created with `0700` permissions and the database file with `0600`.
 - This is not a security boundary against a malicious process running as the same user. For guaranteed cleanup, isolate each agent in a systemd service or cgroup.
 
-## Options
+## Commands and options
 
 ```text
+headless-watch start           Start the installed systemd user service
+headless-watch status          Show service or local HTTP health (--port)
+headless-watch stop            Stop the installed systemd user service
+headless-watch open            Open the dashboard in the desktop browser (--port)
+
 --port PORT                    Loopback HTTP port (default: 8765)
 --interval SECONDS             Process scan interval, 0.5-10 (default: 1)
 --cpu-alert-cores CORES        Sustained CPU threshold in logical cores (default: 1.0)

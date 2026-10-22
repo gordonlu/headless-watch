@@ -53,8 +53,14 @@ async function confirmAction() {
     store.confirm = null;
     await refreshStore();
   } catch (err) {
-    error.value =
-      err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Termination failed.";
+    const message = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Termination failed.";
+    if (message.includes("no longer active") || message.includes("already terminating")) {
+      toast("This session already exited; the live list has been refreshed.", "info");
+      store.confirm = null;
+      await refreshStore();
+      return;
+    }
+    error.value = message;
   } finally {
     busy.value = false;
   }

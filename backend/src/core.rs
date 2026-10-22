@@ -250,6 +250,7 @@ impl Core {
         session_id: &str,
         action: &str,
         message: &str,
+        notify: bool,
     ) -> Option<Notify> {
         let ts = now_wall();
         let message = redact_text(message, 240);
@@ -272,7 +273,7 @@ impl Core {
             self.tracker.events.truncate(200);
         }
         self.revision = self.revision.saturating_add(1);
-        (self.settings.notifications && !self.settings.global_mute).then(|| Notify {
+        (notify && self.settings.notifications && !self.settings.global_mute).then(|| Notify {
             title: "Headless Watch action rejected".to_string(),
             body: message,
         })
@@ -367,4 +368,32 @@ pub fn resolve_web_dir(explicit: Option<PathBuf>) -> Result<PathBuf> {
         }
     }
     anyhow::bail!("dashboard assets not found; run `pnpm --dir frontend build` or pass --web-dir")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn benign_rejections_do_not_notify() {
+        let data = tempfile::tempdir().expect("data");
+        let web = tempfile::tempdir().expect("web");
+        let mut core = Core::open(data.path(), web.path().to_path_buf(), None, None).expect("core");
+        assert!(core
+            .record_rejected_action(
+                "s-test",
+                "term",
+                "This browser session is no longer active.",
+                false,
+            )
+            .is_none());
+        assert!(core
+            .record_rejected_action(
+                "s-test",
+                "term",
+                "Process identity does not match the requested session.",
+                true,
+            )
+            .is_some());
+    }
 }

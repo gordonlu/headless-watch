@@ -538,7 +538,11 @@ async fn reject_action(state: &AppState, id: &str, mode: &str, message: &str) ->
         let Ok(mut core) = state.core.lock() else {
             return ApiError::internal("State lock is poisoned.");
         };
-        core.record_rejected_action(id, mode, message)
+        let notify = !(message.contains("no longer active")
+            || message.contains("already terminating")
+            || message.contains("Explicit confirmation")
+            || message.contains("Mode must be"));
+        core.record_rejected_action(id, mode, message, notify)
     };
     if let Some(notify) = notify {
         let _ =
@@ -816,7 +820,7 @@ async fn run_termination(
                     .lock()
                     .map_err(|_| ApiError::internal("State lock is poisoned."))?;
                 core.finish_termination(&id, &rejection.0, false);
-                core.record_rejected_action(&id, &mode, &rejection.0)
+                core.record_rejected_action(&id, &mode, &rejection.0, true)
             };
             if let Some(notify) = notify {
                 let _ = tokio::task::spawn_blocking(move || {

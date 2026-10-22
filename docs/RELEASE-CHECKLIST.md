@@ -38,8 +38,8 @@ Tracks the PRD acceptance criteria. The PRD can be deleted only when every v1.0 
 
 ## Other v1.0 items
 
-- [ ] Measure performance targets: backend CPU < 1% of one logical core and RSS < 100 MiB in a typical workload.
-- [ ] Add `headless-watch start/status/stop/open` CLI commands (PRD FR-09).
+- [ ] Measure performance targets: RSS is ~13 MiB; CPU measured at ~1.2% of one logical core with a 1s scan and existing sessions, so the < 1% target still needs either a longer measurement or further batching of SQLite writes.
+- [x] Add `headless-watch start/status/stop/open` CLI commands (PRD FR-09).
 - [ ] Notification click-through into the related session detail (PRD FR-07).
 - [ ] Log size limit and update-state reporting (PRD FR-09).
 - [ ] Run one full real OpenCode + Playwright MCP lifecycle against the Rust backend: normal exit, forced interrupt, agent exit with browser alive, CDP available and unavailable.
