@@ -39,8 +39,14 @@ export const selectedSession = computed<SessionView | null>(() =>
 export const recentEnded = computed(() => store.overview?.recent_ended ?? []);
 export const isWindows = computed(() => store.overview?.health.platform === "windows");
 export const pssSupported = computed(() => store.overview?.health.pss_supported !== false);
-export const stopLabel = computed(() => isWindows.value ? "Force stop" : "Stop");
-export const stopMode = computed<"term" | "kill">(() => isWindows.value ? "kill" : "term");
+export const gracefulStopSupported = computed(
+  () => store.overview?.health.graceful_stop_supported ?? !isWindows.value,
+);
+export const basicMemoryLabel = computed(() => isWindows.value ? "Working Set" : "RSS");
+export const stopLabel = computed(() => gracefulStopSupported.value ? "Stop" : "Force stop");
+export const stopMode = computed<"term" | "kill">(() =>
+  gracefulStopSupported.value ? "term" : "kill",
+);
 export const pendingAlerts = computed(() =>
   (store.overview?.events ?? []).filter(
     (event) =>
@@ -130,7 +136,7 @@ export function closeInspector(): void {
 }
 
 export function requestConfirm(session: SessionView, mode: "term" | "kill"): void {
-  store.confirm = { session, mode: isWindows.value ? "kill" : mode };
+  store.confirm = { session, mode: gracefulStopSupported.value ? mode : "kill" };
 }
 
 export function closeConfirm(): void {

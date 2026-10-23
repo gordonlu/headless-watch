@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { ApiError, terminateBatch } from "../api";
 import type { SessionView } from "../types";
-import { isWindows, refreshStore, stopMode, toast } from "../store";
+import { gracefulStopSupported, refreshStore, stopMode, toast } from "../store";
 
 const props = defineProps<{ sessions: SessionView[] }>();
 const emit = defineEmits<{ close: [] }>();
@@ -73,7 +73,7 @@ async function confirm() {
       <header class="modal-head">
         <div>
           <p class="eyebrow">Verified batch action</p>
-          <h2 id="batch-title">{{ isWindows ? 'Force stop' : 'Stop' }} {{ count }} browser session{{ count === 1 ? "" : "s" }}?</h2>
+          <h2 id="batch-title">{{ gracefulStopSupported ? 'Stop' : 'Force stop' }} {{ count }} browser session{{ count === 1 ? "" : "s" }}?</h2>
           <p>Each session is re-verified independently before any signal is sent. Rejected sessions do not affect the others.</p>
         </div>
         <button class="icon-btn" type="button" aria-label="Cancel batch action" :disabled="busy" @click="close">×</button>
@@ -88,18 +88,18 @@ async function confirm() {
           </li>
         </ul>
         <p class="notice notice-warning">
-          {{ isWindows ? 'Windows forcefully terminates each verified browser subtree with TerminateProcess. In-flight work can be lost.' : 'SIGTERM is sent to each verified browser subtree only.' }} Launchers, IDEs, and unrelated Chrome processes are not included. This cannot be undone.
+          {{ gracefulStopSupported ? 'SIGTERM is sent to each verified browser subtree only.' : 'This build forcefully terminates each verified browser subtree with TerminateProcess. In-flight work can be lost.' }} Launchers, IDEs, and unrelated Chrome processes are not included. This cannot be undone.
         </p>
         <label class="check-row" for="batch-check">
           <input id="batch-check" v-model="checked" type="checkbox" :disabled="busy" />
-          <span>I understand the impact and want to stop the {{ count }} selected verified session{{ count === 1 ? "" : "s" }}.</span>
+          <span>I understand the impact and want to {{ gracefulStopSupported ? "stop" : "force stop" }} the {{ count }} selected verified session{{ count === 1 ? "" : "s" }}.</span>
         </label>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       </div>
       <footer class="modal-actions">
         <button class="ghost-btn" type="button" :disabled="busy" @click="close">Cancel</button>
         <button class="danger-btn" type="button" :disabled="!checked || busy" @click="confirm">
-          {{ busy ? "Verifying…" : isWindows ? `Force stop ${count}` : `Stop ${count} · SIGTERM` }}
+          {{ busy ? "Verifying…" : gracefulStopSupported ? `Stop ${count} · SIGTERM` : `Force stop ${count}` }}
         </button>
       </footer>
     </div>

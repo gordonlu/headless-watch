@@ -96,6 +96,23 @@ pub fn own_command(proc: &ProcessInfo) -> String {
     }
 }
 
+/// Keep argument boundaries intact so redaction can see whole switches even
+/// when a Windows path or header value contains spaces.
+pub fn own_command_argv(proc: &ProcessInfo) -> Vec<String> {
+    let mut argv = Vec::new();
+    if !proc.exe.is_empty() {
+        argv.push(proc.exe.clone());
+    }
+    if proc.argv.is_empty() {
+        if proc.exe.is_empty() {
+            argv.push(proc.name.clone());
+        }
+    } else {
+        argv.extend(proc.argv.iter().cloned());
+    }
+    argv
+}
+
 fn label_tokens(text: &str, patterns: &[(&str, &[&str])]) -> Option<String> {
     let tokens = text
         .split(|ch: char| !ch.is_ascii_alphanumeric())

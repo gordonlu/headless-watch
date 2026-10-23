@@ -8,7 +8,7 @@ import {
 } from "../api";
 import type { ActionRow, EventRow, HistorySession, SessionView, StatusView } from "../types";
 import { fmtBytes, fmtCores, fmtDateTime, fmtDuration, titleCase } from "../format";
-import { refreshStore, store, toast } from "../store";
+import { basicMemoryLabel, refreshStore, store, toast } from "../store";
 
 const rows = ref<HistorySession[]>([]);
 const loading = ref(true);
@@ -224,7 +224,7 @@ const detailView = computed<SessionView | null>(() => selected.value?.final_view
           </span>
           <span class="history-facts">
             <span><strong>{{ fmtCores(row.peak_cpu) }}</strong> peak cores</span>
-            <span><strong>{{ fmtBytes(row.latest_pss ?? row.latest_rss) }}</strong> {{ row.latest_pss ? "PSS" : "RSS" }}</span>
+            <span><strong>{{ fmtBytes(row.latest_pss ?? row.latest_rss) }}</strong> {{ row.latest_pss ? "PSS" : basicMemoryLabel }}</span>
             <span>{{ row.latest_process_count }} processes</span>
           </span>
         </button>
@@ -256,7 +256,7 @@ const detailView = computed<SessionView | null>(() => selected.value?.final_view
           <div><dt>Discovery</dt><dd>{{ selected.discovery_mode }}</dd></div>
           <div><dt>Runtime</dt><dd>{{ fmtDuration((selected.ended_at || selected.last_seen_at) - selected.launched_at) }}</dd></div>
           <div><dt>Peak CPU</dt><dd>{{ fmtCores(selected.peak_cpu) }} cores</dd></div>
-          <div><dt>Memory</dt><dd>{{ fmtBytes(selected.latest_pss ?? selected.latest_rss) }} {{ selected.latest_pss ? "PSS" : "RSS upper bound" }}</dd></div>
+          <div><dt>Memory</dt><dd>{{ fmtBytes(selected.latest_pss ?? selected.latest_rss) }} {{ selected.latest_pss ? "PSS" : basicMemoryLabel + " upper bound" }}</dd></div>
           <div><dt>Processes</dt><dd>{{ selected.latest_process_count }}</dd></div>
           <div><dt>Command</dt><dd class="mono wrap">{{ selected.command }}</dd></div>
           <div><dt>cgroup</dt><dd class="mono wrap">{{ selected.cgroup || "Not available" }}</dd></div>

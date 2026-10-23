@@ -83,7 +83,7 @@ For a custom installation pass the same `-InstallDir`. The uninstaller requires 
 powershell -File tools/package-release.ps1
 ```
 
-This writes a Windows ZIP and SHA-256 file under `dist/`. The archive's installer uses prebuilt files without Cargo/pnpm. CI runs Cargo tests, formatting, and the frontend build on both Ubuntu and Windows. Windows lifecycle unit tests cover data-directory singleton locking, shutdown events, and stale creation-time rejection. Installer parser checks and `-DryRun` avoid modifying a CI user's login startup.
+This writes a Windows ZIP and SHA-256 file under `dist/`. The archive's installer uses prebuilt files without Cargo/pnpm. CI runs Cargo tests, formatting, and the frontend build on both Ubuntu and Windows. Windows lifecycle unit tests cover data-directory singleton locking, shutdown events, and stale creation-time rejection. Installer parser checks and `-DryRun` avoid modifying a CI user's login startup, then a temporary `-NoAutoStart` installation exercises `start` → `status` → `stop` → `uninstall`.
 
 For isolated local verification, install into a disposable directory using `-NoAutoStart`, use a free port, exercise `start/status/stop`, and uninstall that directory. Testing the login trigger itself requires a real interactive sign-out/sign-in and is separate from a build or HTTP health check.
 

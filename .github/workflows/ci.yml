@@ -44,3 +44,21 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $script), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw ($errors | Out-String) }
           }
+
+      - name: Windows installer lifecycle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installDir = Join-Path $env:RUNNER_TEMP 'headless-watch-lifecycle'
+          $exe = Join-Path $installDir 'bin/headless-watch.exe'
+          cargo build --release --manifest-path backend/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw 'release build failed' }
+          ./install.ps1 -InstallDir $installDir -Port 18765 -NoAutoStart -SkipStart -SkipBuild
+          & $exe start
+          if ($LASTEXITCODE -ne 0) { throw 'installed monitor start failed' }
+          & $exe status --port 18765
+          if ($LASTEXITCODE -ne 0) { throw 'installed monitor status failed' }
+          & $exe stop
+          if ($LASTEXITCODE -ne 0) { throw 'installed monitor stop failed' }
+          & (Join-Path $installDir 'uninstall.ps1') -InstallDir $installDir -RemoveData
+          if ($LASTEXITCODE -ne 0) { throw 'uninstall failed' }

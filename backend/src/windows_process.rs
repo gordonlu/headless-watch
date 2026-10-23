@@ -10,7 +10,8 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use windows_sys::Win32::Foundation::{
-    CloseHandle, LocalFree, FILETIME, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
+    CloseHandle, GetLastError, LocalFree, ERROR_NO_MORE_FILES, FILETIME, HANDLE,
+    INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::Security::{
     GetLengthSid, GetTokenInformation, TokenUser, TOKEN_QUERY, TOKEN_USER,
@@ -42,10 +43,10 @@ struct UnicodeString {
 
 #[repr(C)]
 struct ProcessBasicInformation {
-    exit_status: isize,
+    exit_status: i32,
     peb: *mut c_void,
     affinity_mask: usize,
-    priority: isize,
+    priority: i32,
     pid: usize,
     parent_pid: usize,
 }
@@ -254,7 +255,7 @@ fn split_command_line(command: &str) -> Vec<String> {
             .map(|pointer| {
                 let mut length = 0;
                 unsafe {
-                    while *pointer.add(length) != 0 && length < MAX_COMMAND_BYTES / 2 {
+                    while length < MAX_COMMAND_BYTES / 2 && *pointer.add(length) != 0 {
                         length += 1;
                     }
                 }
@@ -435,6 +436,8 @@ pub fn scan(proc_root: &Path, boot_id: &str) -> ProcSnapshot {
     let mut processes = HashMap::new();
     let mut pids_seen = HashSet::new();
     let mut unreadable = HashSet::new();
+    let mut scan_ok = true;
+    let mut scan_error = None;
     loop {
         let pid = entry.th32ProcessID;
         if pid != 0 {
@@ -452,12 +455,24 @@ pub fn scan(proc_root: &Path, boot_id: &str) -> ProcSnapshot {
                     )
                 });
             if let Some(proc) = proc {
+                // A browser whose command line cannot be read must not silently
+                // disappear from a live snapshot; keep its session stale instead.
+                if proc.argv.is_empty() && crate::browser::is_browser_executable(&proc) {
+                    unreadable.insert(pid);
+                }
                 processes.insert(pid, proc);
             } else {
                 unreadable.insert(pid);
             }
         }
         if unsafe { Process32NextW(snapshot_handle.0, &mut entry) } == 0 {
+            let code = unsafe { GetLastError() };
+            if code != ERROR_NO_MORE_FILES {
+                scan_ok = false;
+                scan_error = Some(format!(
+                    "Windows process enumeration stopped early (error {code})."
+                ));
+            }
             break;
         }
     }
@@ -497,8 +512,8 @@ pub fn scan(proc_root: &Path, boot_id: &str) -> ProcSnapshot {
         pids_seen,
         unreadable,
         zombie_pids: HashSet::new(),
-        scan_ok: true,
-        error: None,
+        scan_ok,
+        error: scan_error,
         online_cpus: online_cpu_count(),
     }
 }

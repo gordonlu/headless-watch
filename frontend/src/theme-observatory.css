@@ -30,7 +30,8 @@ html:not([data-theme="terminal"]) {
   --r-sm: 6px;
 }
 
-.page-description { margin-top: 9px; color: var(--muted); font-size: 14px; }
+html:not([data-theme="terminal"]) .page-description { margin-top: 9px; color: var(--muted); font-size: 14px; }
+html[data-theme="terminal"] .page-description { display: none; }
 .refresh-btn { gap: 8px; }
 .refresh-btn svg { width: 17px; height: 17px; }
 .kpi-icon { display: none; }
@@ -78,6 +79,8 @@ html:not([data-theme="terminal"]) .seg-btn { min-height: 30px; padding: 0 12px; 
 html:not([data-theme="terminal"]) .seg-btn.is-active { background: var(--mint-soft); color: var(--mint); box-shadow: none; }
 html:not([data-theme="terminal"]) .ghost-btn,
 html:not([data-theme="terminal"]) .btn { min-height: 37px; border-radius: 6px; background: #1c2129; font-size: 12px; }
+html:not([data-theme="terminal"]) .primary-btn,
+html:not([data-theme="terminal"]) .danger-btn { min-height: 37px; border-radius: 6px; }
 html:not([data-theme="terminal"]) .stop-btn { border-color: #70424a; color: var(--red); background: #241a20; }
 html:not([data-theme="terminal"]) .ghost-btn.small,
 html:not([data-theme="terminal"]) .stop-btn.small,
@@ -97,7 +100,6 @@ html:not([data-theme="terminal"]) .kpi-tag { display: none; }
 html:not([data-theme="terminal"]) .kpi-value { font: 500 34px/1.15 var(--mono); margin-top: 13px; letter-spacing: -.04em; }
 html:not([data-theme="terminal"]) .kpi-sub { font-size: 11px; margin-top: 8px; color: var(--faint); }
 html:not([data-theme="terminal"]) .kpi-foot { font-size: 10px; flex-wrap: wrap; white-space: normal; gap: 4px 8px; margin-top: 12px; }
-html:not([data-theme="terminal"]) .kpi-foot span:last-child { display: none; }
 html:not([data-theme="terminal"]) .chart-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 html:not([data-theme="terminal"]) .chart-panel.compact { padding: 16px 16px 12px; }
 html:not([data-theme="terminal"]) .chart-panel.compact h3 { font-size: 14px; font-weight: 600; }
@@ -106,7 +108,6 @@ html:not([data-theme="terminal"]) .chart-grid .chart-wrap { height: 160px; }
 html:not([data-theme="terminal"]) .chart-legend { gap: 9px; }
 html:not([data-theme="terminal"]) .legend-item { font-size: 11px; }
 html:not([data-theme="terminal"]) .chart-foot { border-top: 1px solid var(--line-soft); padding-top: 9px; font-size: 10px; line-height: 1.6; }
-html:not([data-theme="terminal"]) .chart-foot span:last-child { display: none; }
 html:not([data-theme="terminal"]) .section-head { margin-bottom: 14px; align-items: center; }
 html:not([data-theme="terminal"]) .count { font-size: 16px; color: var(--faint); background: none; border: 0; }
 html:not([data-theme="terminal"]) .session-grid { grid-template-columns: 1fr; gap: 10px; }
@@ -149,6 +150,22 @@ html:not([data-theme="terminal"]) .select,
 html:not([data-theme="terminal"]) .search-wrap input { min-height: 37px; background: var(--bg-soft); font-size: 12px; }
 html:not([data-theme="terminal"]) .modal-dialog,
 html:not([data-theme="terminal"]) .inspector { background: var(--surface); }
+html:not([data-theme="terminal"]) .batch-row,
+html:not([data-theme="terminal"]) .table-wrap,
+html:not([data-theme="terminal"]) .detail-metric,
+html:not([data-theme="terminal"]) .fact-grid > div,
+html:not([data-theme="terminal"]) .confirm-facts > div,
+html:not([data-theme="terminal"]) .inspector-footer,
+html:not([data-theme="terminal"]) .browser-tab,
+html:not([data-theme="terminal"]) .recent-row,
+html:not([data-theme="terminal"]) .history-row,
+html:not([data-theme="terminal"]) .alert-row,
+html:not([data-theme="terminal"]) .toggle-row { background: var(--bg-soft); }
+html:not([data-theme="terminal"]) .recent-row:hover,
+html:not([data-theme="terminal"]) .history-row:hover { background: var(--raised); }
+html:not([data-theme="terminal"]) .toast { background: var(--raised); }
+html:not([data-theme="terminal"]) .field input:disabled,
+html:not([data-theme="terminal"]) .field select:disabled { opacity: .55; cursor: not-allowed; }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--mint); outline-offset: 3px; }
 
 @media (min-width: 1201px) {

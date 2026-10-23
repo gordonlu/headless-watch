@@ -6,6 +6,7 @@ import {
   closeInspector,
   copyText,
   diagnosticReport,
+  gracefulStopSupported,
   isWindows,
   requestConfirm,
   selectedSession,
@@ -247,7 +248,7 @@ async function mute() {
             </div>
             <div class="footer-actions">
               <button
-                v-if="session.force_available && !isWindows"
+                v-if="session.force_available && gracefulStopSupported"
                 class="danger-btn small"
                 type="button"
                 @click="requestConfirm(session, 'kill')"
@@ -257,7 +258,7 @@ async function mute() {
                 type="button"
                 :disabled="!session.can_terminate"
                 @click="requestConfirm(session, 'term')"
-              >{{ isWindows ? 'Force stop' : 'Stop · SIGTERM' }}</button>
+              >{{ gracefulStopSupported ? 'Stop · SIGTERM' : 'Force stop' }}</button>
             </div>
           </footer>
         </aside>

@@ -235,12 +235,14 @@ pub fn start() -> Result<()> {
         if let Some(status) = child.try_wait()? {
             bail!("monitor exited ({status}); check {}", log.display());
         }
-        if super::local_health(config.port).is_some() {
+        if super::local_health(config.port).is_some_and(|health| health.3 == child.id()) {
             println!("Headless Watch started at http://127.0.0.1:{}", config.port);
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(200));
     }
+    let _ = child.kill();
+    let _ = child.wait();
     bail!("monitor has not become ready; check {}", log.display())
 }
 

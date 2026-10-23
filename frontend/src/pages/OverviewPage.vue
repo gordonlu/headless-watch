@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { PageName } from "../types";
 import { fmtAgo, fmtBytes, fmtCores, fmtDuration, fmtPct } from "../format";
-import { isWindows, pssSupported, store } from "../store";
+import { basicMemoryLabel, isWindows, pssSupported, store } from "../store";
 import MetricCard from "../components/MetricCard.vue";
 import HistoryChart from "../components/HistoryChart.vue";
 import SessionCard from "../components/SessionCard.vue";
@@ -48,13 +48,11 @@ const cpuSub = computed(() => {
   }
   return `${fmtPct(summary.value.cpu_single_core_pct)} of one core`;
 });
-const memoryFoot = computed(() => {
-  if (!summary.value) return "ΣRSS upper bound";
-  if (summary.value.pss_sum !== null) {
-    return `PSS ${fmtBytes(summary.value.pss_sum)} · ${summary.value.pss_age_s ?? "—"}s ago`;
-  }
-  return `ΣRSS ~${fmtBytes(summary.value.rss_sum)} · upper bound`;
-});
+const riskFoot = computed(() =>
+  summary.value && (summary.value.suspected_leftovers || summary.value.high_cpu)
+    ? "review alerts"
+    : "within thresholds",
+);
 </script>
 
 <template>
@@ -95,7 +93,7 @@ const memoryFoot = computed(() => {
         :sub="summary?.parent_exited ? `${summary.parent_exited} parent exit observed` : 'No launcher exit observed'"
         tag="Risk"
         :foot-left="`${summary?.high_cpu ?? 0} high CPU`"
-        :foot-right="memoryFoot"
+        :foot-right="riskFoot"
         accent="risk"
         :alert="Boolean(summary?.suspected_leftovers || summary?.high_cpu)"
       />
@@ -154,7 +152,7 @@ const memoryFoot = computed(() => {
           <span class="chart-window">{{ pssSupported ? `PSS ${overview?.settings.pss_interval_s ?? '—'}s` : 'PSS unavailable' }}</span>
         </div>
         <HistoryChart :points="chartPoints" metric="memory" />
-        <div class="chart-foot"><span>{{ memoryNote }}</span><span>{{ fmtBytes(summary?.pss_sum ?? summary?.rss_sum) }} {{ summary?.pss_sum !== null ? "PSS" : "RSS" }}</span></div>
+        <div class="chart-foot"><span>{{ memoryNote }}</span><span>{{ fmtBytes(summary?.pss_sum ?? summary?.rss_sum) }} {{ summary?.pss_sum !== null ? "PSS" : basicMemoryLabel }}</span></div>
       </article>
     </section>
 
@@ -190,7 +188,7 @@ const memoryFoot = computed(() => {
           <span class="recent-meta">{{ endedSource(item.source) }} · ended {{ fmtAgo(item.ended_at, store.nowMs) }} · ran {{ fmtDuration((item.ended_at || item.launched_at) - item.launched_at) }}</span>
           <span class="recent-facts">
             <span>{{ fmtCores(item.peak_cpu) }} peak cores</span>
-            <span>{{ fmtBytes(item.latest_pss ?? item.latest_rss) }} {{ item.latest_pss !== null ? "PSS" : "RSS" }}</span>
+            <span>{{ fmtBytes(item.latest_pss ?? item.latest_rss) }} {{ item.latest_pss !== null ? "PSS" : basicMemoryLabel }}</span>
             <span>{{ item.latest_process_count }} processes</span>
           </span>
         </button>

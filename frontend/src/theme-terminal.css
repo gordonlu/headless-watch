@@ -514,6 +514,11 @@ html[data-theme="terminal"] .field input {
   font: 13px var(--sans);
 }
 
+html[data-theme="terminal"] .field input:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
 html[data-theme="terminal"] .search-wrap input:focus,
 html[data-theme="terminal"] .select:focus,
 html[data-theme="terminal"] .field input:focus {
@@ -1440,7 +1445,7 @@ html[data-theme="terminal"] .theme-switch {
 
 .tape-row {
   display: grid;
-  grid-template-columns: 8px 82px minmax(0, 1fr) 82px 78px 62px 40px;
+  grid-template-columns: 8px 82px minmax(0, 1fr) 82px 78px 62px 78px;
   gap: 8px;
   align-items: center;
   width: 100%;
@@ -1505,12 +1510,13 @@ html[data-theme="terminal"] .theme-switch {
 }
 
 .tape-stop {
-  padding: 2px 3px;
+  padding: 2px 4px;
   border: 1px solid #75343d;
   border-radius: 2px;
   background: #2a1117;
   color: #ff8b9c;
-  font: 12px "IBM Plex Mono", ui-monospace, monospace;
+  font: 11px "IBM Plex Mono", ui-monospace, monospace;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1661,7 +1667,7 @@ html[data-theme="terminal"] .theme-switch {
   }
 
   .tape-row {
-    grid-template-columns: 8px 64px minmax(0, 1fr) 62px 34px;
+    grid-template-columns: 8px 64px minmax(0, 1fr) 62px 78px;
   }
 
   .tape-mem,

@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tracing::warn;
 
-use crate::attribution::{build_attribution, own_command, Attribution};
+use crate::attribution::{build_attribution, own_command_argv, Attribution};
 use crate::browser::{browser_roots, cdp_endpoint, process_role, CdpEndpoint};
 use crate::cdp::{CdpProbe, CdpTab};
 use crate::model::{machine_pct, CpuValue, ProcSnapshot, ProcessIdentity, ProcessInfo, VERSION};
@@ -228,7 +228,7 @@ struct Session {
     root_start_ticks: u64,
     browser: String,
     executable: String,
-    command: String,
+    command: Vec<String>,
     cgroup: Option<String>,
     uid: Option<u32>,
     discovery_mode: String,
@@ -885,7 +885,7 @@ impl Session {
             root_start_ticks: root.start_ticks,
             browser: crate::browser::browser_family(root),
             executable: root.executable_basename(),
-            command: own_command(root),
+            command: own_command_argv(root),
             cgroup: root.cgroup.clone(),
             uid: root.uid,
             discovery_mode,
@@ -1387,14 +1387,7 @@ impl Session {
             identity: self.root_identity.clone(),
             browser: self.browser.clone(),
             executable: self.executable.clone(),
-            command: redact_argv(
-                &self
-                    .command
-                    .split_whitespace()
-                    .map(str::to_string)
-                    .collect::<Vec<_>>(),
-                420,
-            ),
+            command: redact_argv(&self.command, 420),
             cgroup: self.cgroup.as_deref().map(redact_path),
             uid: self.uid,
             discovery_mode: self.discovery_mode.clone(),
@@ -1435,14 +1428,7 @@ impl Session {
             root_start_ticks: self.root_start_ticks,
             browser: self.browser.clone(),
             executable: self.executable.clone(),
-            command: redact_argv(
-                &self
-                    .command
-                    .split_whitespace()
-                    .map(str::to_string)
-                    .collect::<Vec<_>>(),
-                420,
-            ),
+            command: redact_argv(&self.command, 420),
             cgroup: self.cgroup.as_deref().map(redact_path),
             uid: self.uid,
             launched_at: self.launched_at,
@@ -1621,6 +1607,42 @@ mod tests {
         assert!(views[0].preexisting);
         assert_eq!(views[0].source.launcher, "Unknown");
         assert_eq!(views[0].source.confidence, "unknown");
+    }
+
+    #[test]
+    fn keeps_spaced_windows_arguments_redacted_in_views_and_history() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut store = Storage::open(dir.path()).expect("storage");
+        let mut tracker = Tracker::new("boot".to_string(), 8);
+        let base_at = Instant::now();
+        let base_wall = tracker.started_wall + 1.0;
+        let root = process(
+            620,
+            1,
+            "/opt/google/chrome/chrome",
+            &[
+                "--headless=new",
+                "--header=Authorization: Bearer secret",
+                r"--user-data-dir=C:\Users\John Doe\AppData\Local\Temp\profile",
+            ],
+            (90.0 * clk_tck()) as u64,
+            0,
+        );
+        let settings = Settings::default();
+        tracker.update(
+            snapshot(vec![root], base_at, 0.0, base_wall),
+            &settings,
+            &mut store,
+        );
+        let views = tracker.session_views(&settings, base_wall);
+        assert_eq!(views.len(), 1);
+        assert!(views[0].command.contains("--header=<redacted>"));
+        assert!(views[0].command.contains("--user-data-dir=<redacted>"));
+        assert!(!views[0].command.contains("Bearer secret"));
+        assert!(!views[0].command.contains("John Doe"));
+        let record = tracker.sessions.values().next().unwrap().record(base_wall);
+        assert!(!record.command.contains("Bearer secret"));
+        assert!(!record.command.contains("John Doe"));
     }
 
     #[test]

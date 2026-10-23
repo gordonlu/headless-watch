@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { downloadExport, getSettings, saveSettings } from "../api";
 import type { Settings, SettingsPayload } from "../types";
 import { fmtBytes } from "../format";
-import { isWindows, refreshStore, store, toast } from "../store";
+import { pssSupported, refreshStore, store, toast } from "../store";
 
 const defaults: Settings = {
   interval_s: 1,
@@ -29,6 +29,7 @@ const saving = ref(false);
 const error = ref("");
 
 const dirty = computed(() => JSON.stringify(form) !== original.value);
+const notificationsAvailable = computed(() => info.value?.notifications_available ?? true);
 
 async function loadSettings() {
   loading.value = true;
@@ -112,8 +113,8 @@ onMounted(loadSettings);
             </label>
             <label class="field">
               <span>PSS interval</span>
-              <input v-model.number="form.pss_interval_s" type="number" min="5" max="300" step="5" :disabled="isWindows" />
-              <small>{{ isWindows ? 'PSS is unavailable on Windows. Memory uses the process Working Set.' : '5–300 seconds. PSS never blocks the fast scanner.' }}</small>
+              <input v-model.number="form.pss_interval_s" type="number" min="5" max="300" step="5" :disabled="!pssSupported" />
+              <small>{{ pssSupported ? '5–300 seconds. PSS never blocks the fast scanner.' : 'PSS is unavailable on this platform. Memory uses the process Working Set.' }}</small>
             </label>
             <label class="field">
               <span>CDP polling interval</span>
@@ -156,15 +157,15 @@ onMounted(loadSettings);
           </div>
           <div class="toggle-list">
             <label class="toggle-row">
-              <span><strong>Desktop notifications</strong><small>Uses notify-send when a desktop notification service is available.</small></span>
-              <input v-model="form.notifications" type="checkbox" />
+              <span><strong>Desktop notifications</strong><small v-if="notificationsAvailable">Uses notify-send when a desktop notification service is available.</small><small v-else>Desktop delivery is unavailable in this build; alerts remain in the dashboard.</small></span>
+              <input v-model="form.notifications" type="checkbox" :disabled="!notificationsAvailable" />
             </label>
             <label class="toggle-row">
               <span><strong>Global mute</strong><small>Keeps recording alert events but suppresses desktop notifications.</small></span>
               <input v-model="form.global_mute" type="checkbox" />
             </label>
           </div>
-          <p v-if="info && !info.notifications_available" class="notice notice-warning">notify-send was not found. Dashboard alerts still work; desktop delivery is unavailable.</p>
+          <p v-if="!notificationsAvailable" class="notice notice-warning">Desktop notifications are unavailable on this platform. Dashboard alerts, history and acknowledgement still work.</p>
         </section>
 
         <section class="panel settings-card">

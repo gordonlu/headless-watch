@@ -15,20 +15,30 @@ use crate::procfs::{self, OwnedHandle};
 
 const MAX_TARGETS: usize = 2000;
 
-fn verified_handle(target: &ProcessInfo, owner: &[u8]) -> Result<OwnedHandle, std::io::Error> {
+#[derive(Debug)]
+enum VerifyFailure {
+    Open(std::io::Error),
+    Gone,
+    Rejected,
+    Owner,
+}
+
+fn verified_handle(target: &ProcessInfo, owner: &[u8]) -> Result<OwnedHandle, VerifyFailure> {
     let handle = procfs::open_process(
         target.pid,
         PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE | PROCESS_TERMINATE,
-    )?;
-    if target.pid == std::process::id()
-        || procfs::process_creation_time(handle.0) != Some(target.start_ticks)
-        || procfs::process_sid(handle.0).as_deref() != Some(owner)
+    )
+    .map_err(VerifyFailure::Open)?;
+    if target.pid == std::process::id() {
+        return Err(VerifyFailure::Rejected);
+    }
+    if procfs::process_creation_time(handle.0) != Some(target.start_ticks)
         || !procfs::process_running(handle.0)
     {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "Process identity or owner no longer matches.",
-        ));
+        return Err(VerifyFailure::Gone);
+    }
+    if procfs::process_sid(handle.0).as_deref() != Some(owner) {
+        return Err(VerifyFailure::Owner);
     }
     Ok(handle)
 }
@@ -99,26 +109,35 @@ pub fn terminate(
     }
     let mut verified: HashMap<u32, (ProcessInfo, OwnedHandle)> = HashMap::new();
     verified.insert(root.pid, (root.clone(), root_handle));
-    let mut unauthorized = 0;
-    let mut skipped = 0;
+    let mut unauthorized = HashSet::new();
+    let mut skipped = HashSet::new();
     // descendants is breadth first: a candidate's complete ancestry must already
     // be pinned and verified before admitting that child to the target list.
     for target in candidates.iter().filter(|target| target.pid != root.pid) {
         let Some((parent, _)) = verified.get(&target.ppid) else {
-            skipped += 1;
+            skipped.insert(target.pid);
             continue;
         };
         if target.start_ticks < parent.start_ticks {
-            skipped += 1;
+            skipped.insert(target.pid);
             continue;
         }
         match verified_handle(target, &owner) {
             Ok(handle) if procfs::parent_pid(handle.0) == Some(target.ppid) => {
                 verified.insert(target.pid, (target.clone(), handle));
             }
-            Ok(_) => skipped += 1,
-            Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => unauthorized += 1,
-            Err(_) => skipped += 1,
+            Ok(_) => {
+                skipped.insert(target.pid);
+            }
+            Err(VerifyFailure::Open(err)) if err.kind() == std::io::ErrorKind::PermissionDenied => {
+                unauthorized.insert(target.pid);
+            }
+            Err(VerifyFailure::Owner) => {
+                unauthorized.insert(target.pid);
+            }
+            Err(_) => {
+                skipped.insert(target.pid);
+            }
         }
     }
     let wait_s = request
@@ -149,19 +168,25 @@ pub fn terminate(
                 continue;
             }
             if procfs::process_creation_time(handle.0) != Some(target.start_ticks)
-                || procfs::process_sid(handle.0).as_deref() != Some(owner.as_slice())
+                || !procfs::process_running(handle.0)
             {
-                unauthorized += 1;
+                skipped.insert(target.pid);
+                continue;
+            }
+            if procfs::process_sid(handle.0).as_deref() != Some(owner.as_slice()) {
+                unauthorized.insert(target.pid);
                 continue;
             }
             if unsafe { TerminateProcess(handle.0, 1) } != 0 {
                 signaled += 1;
             } else {
                 let error = std::io::Error::last_os_error();
-                if error.kind() == std::io::ErrorKind::PermissionDenied {
-                    unauthorized += 1;
+                if !procfs::process_running(handle.0) {
+                    skipped.insert(target.pid);
+                } else if error.kind() == std::io::ErrorKind::PermissionDenied {
+                    unauthorized.insert(target.pid);
                 } else {
-                    skipped += 1;
+                    skipped.insert(target.pid);
                     errors.push(error.to_string());
                 }
             }
@@ -212,22 +237,31 @@ pub fn terminate(
                     continue;
                 }
                 let Some((parent, _)) = verified.get(&target.ppid) else {
-                    skipped += 1;
+                    skipped.insert(target.pid);
                     continue;
                 };
                 if target.start_ticks < parent.start_ticks {
-                    skipped += 1;
+                    skipped.insert(target.pid);
                     continue;
                 }
                 match verified_handle(target, &owner) {
                     Ok(handle) if procfs::parent_pid(handle.0) == Some(target.ppid) => {
                         verified.insert(target.pid, (target.clone(), handle));
                     }
-                    Ok(_) => skipped += 1,
-                    Err(err) if err.kind() == std::io::ErrorKind::PermissionDenied => {
-                        unauthorized += 1
+                    Ok(_) => {
+                        skipped.insert(target.pid);
                     }
-                    Err(_) => skipped += 1,
+                    Err(VerifyFailure::Open(err))
+                        if err.kind() == std::io::ErrorKind::PermissionDenied =>
+                    {
+                        unauthorized.insert(target.pid);
+                    }
+                    Err(VerifyFailure::Owner) => {
+                        unauthorized.insert(target.pid);
+                    }
+                    Err(_) => {
+                        skipped.insert(target.pid);
+                    }
                 }
             }
         }
@@ -241,9 +275,13 @@ pub fn terminate(
         .is_some_and(|(_, handle)| procfs::process_running(handle.0));
     let (result, message) = if root_alive {
         ("still_running", format!("TerminateProcess was applied to {signaled} verified process(es); the browser is still running ({survivors} survivor(s))."))
-    } else if survivors > 0 || unauthorized > 0 || skipped > 0 || !scan_confirmed || tree_truncated
+    } else if survivors > 0
+        || !unauthorized.is_empty()
+        || !skipped.is_empty()
+        || !scan_confirmed
+        || tree_truncated
     {
-        ("stopped_root", format!("Browser root was force stopped. {survivors} observed survivor(s), {unauthorized} denied and {skipped} skipped process(es); complete tree cleanup is not confirmed."))
+        ("stopped_root", format!("Browser root was force stopped. {survivors} observed survivor(s), {} denied and {} skipped process(es); complete tree cleanup is not confirmed.", unauthorized.len(), skipped.len()))
     } else {
         (
             "killed",
@@ -260,8 +298,8 @@ pub fn terminate(
         targets: observed.len(),
         signaled,
         survivors,
-        unauthorized,
-        skipped,
+        unauthorized: unauthorized.len() as u32,
+        skipped: skipped.len() as u32,
         force_available: root_alive,
         details: serde_json::json!({"platform": "windows", "termination": "TerminateProcess", "graceful": false, "verified_targets": verified.len(), "verification_scope": "observed_descendants", "follow_up_scan": scan_confirmed, "tree_truncated": tree_truncated, "errors": errors}),
     })

@@ -7,8 +7,11 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use headless_watch::cdp::probe_tabs;
-use headless_watch::core::{resolve_web_dir, Core, PssResult};
+#[cfg(not(windows))]
+use headless_watch::core::PssResult;
+use headless_watch::core::{resolve_web_dir, Core};
 use headless_watch::model::VERSION;
+#[cfg(not(windows))]
 use headless_watch::procfs::read_pss;
 use headless_watch::server::{broadcast_state, build_app, read_index_template, AppState};
 use headless_watch::settings::Settings;
@@ -195,7 +198,7 @@ fn run_command(command: Command) -> Result<()> {
     }
 }
 
-fn local_health(port: u16) -> Option<(String, String, i64)> {
+fn local_health(port: u16) -> Option<(String, String, i64, u32)> {
     use std::io::{Read, Write};
     use std::net::TcpStream;
     use std::time::Duration;
@@ -222,6 +225,7 @@ fn local_health(port: u16) -> Option<(String, String, i64)> {
         parsed.get("status")?.as_str()?.to_string(),
         parsed.get("version")?.as_str()?.to_string(),
         parsed.get("active_sessions")?.as_i64().unwrap_or(0),
+        parsed.get("monitor_pid")?.as_u64()? as u32,
     ))
 }
 
@@ -395,58 +399,63 @@ fn scanner_loop(state: AppState, stop: Arc<AtomicBool>) {
 }
 
 fn side_loop(state: AppState, stop: Arc<AtomicBool>) {
+    #[cfg(not(windows))]
     let mut next_pss = Instant::now();
-    let mut next_cdp = Instant::now();
+    #[cfg(not(windows))]
     let mut last_receivers = state.tx.receiver_count();
+    let mut next_cdp = Instant::now();
     while !stop.load(Ordering::Relaxed) {
-        let receivers = state.tx.receiver_count();
-        if receivers > 0 && last_receivers == 0 {
-            // A dashboard just connected; take a fresh PSS sample instead of
-            // waiting for the idle backoff window.
-            next_pss = Instant::now();
-        }
-        last_receivers = receivers;
-        let now = Instant::now();
-        if now >= next_pss {
-            let (targets, pss_interval) = {
-                let Ok(core) = state.core.lock() else {
-                    thread::sleep(Duration::from_millis(500));
-                    continue;
+        #[cfg(not(windows))]
+        {
+            let receivers = state.tx.receiver_count();
+            if receivers > 0 && last_receivers == 0 {
+                // A dashboard just connected; take a fresh PSS sample instead of
+                // waiting for the idle backoff window.
+                next_pss = Instant::now();
+            }
+            last_receivers = receivers;
+            let now = Instant::now();
+            if now >= next_pss {
+                let (targets, pss_interval) = {
+                    let Ok(core) = state.core.lock() else {
+                        thread::sleep(Duration::from_millis(500));
+                        continue;
+                    };
+                    let interval = if state.tx.receiver_count() == 0 {
+                        core.settings.pss_interval_s.max(30.0)
+                    } else {
+                        core.settings.pss_interval_s
+                    };
+                    (core.pss_targets(), interval)
                 };
-                let interval = if state.tx.receiver_count() == 0 {
-                    core.settings.pss_interval_s.max(30.0)
-                } else {
-                    core.settings.pss_interval_s
-                };
-                (core.pss_targets(), interval)
-            };
-            let mut results = Vec::new();
-            for (session_id, processes) in targets {
-                let mut values = Vec::new();
-                let mut errors = Vec::new();
-                for (pid, _start_ticks) in processes.iter().copied() {
-                    match read_pss(pid, std::path::Path::new("/proc")) {
-                        Ok(value) => values.push((pid, value)),
-                        Err(err) => errors.push(format!("{pid}: {err}")),
+                let mut results = Vec::new();
+                for (session_id, processes) in targets {
+                    let mut values = Vec::new();
+                    let mut errors = Vec::new();
+                    for (pid, _start_ticks) in processes.iter().copied() {
+                        match read_pss(pid, std::path::Path::new("/proc")) {
+                            Ok(value) => values.push((pid, value)),
+                            Err(err) => errors.push(format!("{pid}: {err}")),
+                        }
                     }
+                    results.push(PssResult {
+                        session_id,
+                        values,
+                        errors,
+                        sampled_at: headless_watch::util::now_wall(),
+                    });
                 }
-                results.push(PssResult {
-                    session_id,
-                    values,
-                    errors,
-                    sampled_at: headless_watch::util::now_wall(),
-                });
+                if !results.is_empty() {
+                    let Ok(mut core) = state.core.lock() else {
+                        continue;
+                    };
+                    core.apply_pss_results(results);
+                }
+                if !stop.load(Ordering::Relaxed) {
+                    publish(&state, Vec::new());
+                }
+                next_pss = Instant::now() + Duration::from_secs_f64(pss_interval.max(5.0));
             }
-            if !results.is_empty() {
-                let Ok(mut core) = state.core.lock() else {
-                    continue;
-                };
-                core.apply_pss_results(results);
-            }
-            if !stop.load(Ordering::Relaxed) {
-                publish(&state, Vec::new());
-            }
-            next_pss = Instant::now() + Duration::from_secs_f64(pss_interval.max(5.0));
         }
         if Instant::now() >= next_cdp {
             let (targets, cdp_interval) = {

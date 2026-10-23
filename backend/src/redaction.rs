@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use regex::Regex;
+use regex::{Regex, RegexBuilder};
 use url::Url;
 
 use crate::util::{home_dir, truncate_chars};
@@ -63,6 +63,22 @@ pub fn redact_url(value: &str) -> String {
     )
 }
 
+fn redact_home(text: &str) -> String {
+    let home = home_dir();
+    if home == "/" || home.is_empty() {
+        return text.to_string();
+    }
+    if cfg!(windows) {
+        if let Ok(pattern) = RegexBuilder::new(&regex::escape(&home))
+            .case_insensitive(true)
+            .build()
+        {
+            return pattern.replace_all(text, "~").into_owned();
+        }
+    }
+    text.replace(&home, "~")
+}
+
 fn clean_text(text: &str, max_length: usize) -> String {
     let cleaned: String = text
         .chars()
@@ -70,12 +86,7 @@ fn clean_text(text: &str, max_length: usize) -> String {
         .collect();
     let cleaned = cleaned.replace(['\n', '\r'], " ");
     let cleaned = URL_RE.replace_all(&cleaned, |caps: &regex::Captures<'_>| redact_url(&caps[0]));
-    let home = home_dir();
-    let cleaned = if home != "/" && !home.is_empty() {
-        cleaned.replace(&home, "~")
-    } else {
-        cleaned.to_string()
-    };
+    let cleaned = redact_home(&cleaned);
     let collapsed = cleaned.split_whitespace().collect::<Vec<_>>().join(" ");
     truncate_chars(&collapsed, max_length)
 }
@@ -126,14 +137,8 @@ pub fn redact_text(value: &str, max_length: usize) -> String {
 }
 
 pub fn redact_path(value: &str) -> String {
-    let home = home_dir();
     let text: String = value.chars().filter(|ch| !ch.is_control()).collect();
-    let text = if home != "/" && !home.is_empty() && text.starts_with(&home) {
-        format!("~{}", &text[home.len()..])
-    } else {
-        text
-    };
-    truncate_chars(&text, 240)
+    truncate_chars(&redact_home(&text), 240)
 }
 
 #[cfg(test)]
@@ -160,6 +165,21 @@ mod tests {
         assert!(value.contains("--user-data-dir=<redacted>"));
         assert!(value.contains("--remote-debugging-port=0"));
         assert!(!value.contains(&home));
+    }
+
+    #[test]
+    fn preserves_argument_boundaries_for_spaced_windows_values() {
+        let argv = vec![
+            r"C:\Program Files\Chrome\chrome.exe".to_string(),
+            "--headless=new".to_string(),
+            r"--user-data-dir=C:\Users\John Doe\AppData\Local\Temp\profile".to_string(),
+            "--header=Authorization: Bearer secret".to_string(),
+        ];
+        let value = redact_argv(&argv, 500);
+        assert!(value.contains("--user-data-dir=<redacted>"));
+        assert!(value.contains("--header=<redacted>"));
+        assert!(!value.contains("John Doe"));
+        assert!(!value.contains("Bearer secret"));
     }
 
     #[test]

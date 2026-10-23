@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { ApiError, terminateSession } from "../api";
-import { closeConfirm, isWindows, refreshStore, store, toast } from "../store";
+import { closeConfirm, gracefulStopSupported, refreshStore, store, toast } from "../store";
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const checked = ref(false);
@@ -9,8 +9,9 @@ const busy = ref(false);
 const error = ref("");
 
 const request = computed(() => store.confirm);
-const modeLabel = computed(() => isWindows.value ? "Force stop" : request.value?.mode === "kill" ? "Force kill" : "Stop gracefully");
-const verb = computed(() => isWindows.value ? "TerminateProcess" : request.value?.mode === "kill" ? "SIGKILL" : "SIGTERM");
+const forceStop = computed(() => !gracefulStopSupported.value);
+const modeLabel = computed(() => forceStop.value ? "Force stop" : request.value?.mode === "kill" ? "Force kill" : "Stop gracefully");
+const verb = computed(() => forceStop.value ? "TerminateProcess" : request.value?.mode === "kill" ? "SIGKILL" : "SIGTERM");
 
 watch(
   request,
@@ -88,11 +89,11 @@ async function confirmAction() {
           <div><dt>Session</dt><dd><code>{{ request.session.id }}</code></dd></div>
         </dl>
         <p class="notice notice-warning">
-          {{ isWindows ? 'Windows forcefully terminates the verified browser subtree. In-flight work can be lost. Process creation time and the current user SID are checked again before termination.' : 'This sends a signal to the currently verified browser root and its same-UID descendants.' }} Launchers and unrelated browsers are excluded. The action cannot be undone.
+          {{ forceStop ? 'This build forcefully terminates the verified browser subtree. In-flight work can be lost. Process creation time and the current user SID are checked again before termination.' : 'This sends a signal to the currently verified browser root and its same-UID descendants.' }} Launchers and unrelated browsers are excluded. The action cannot be undone.
         </p>
         <label class="check-row" for="confirm-check">
           <input id="confirm-check" v-model="checked" type="checkbox" :disabled="busy" />
-          <span>I understand the impact and want to {{ request.mode === "kill" ? "force kill" : "stop" }} this verified browser subtree.</span>
+          <span>I understand the impact and want to {{ forceStop ? "force stop" : request.mode === "kill" ? "force kill" : "stop" }} this verified browser subtree.</span>
         </label>
         <p v-if="error" class="form-error" role="alert">{{ error }}</p>
       </div>

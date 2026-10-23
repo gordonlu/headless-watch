@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import type { SessionView } from "../types";
 import { fmtCores } from "../format";
-import { isWindows, sessions } from "../store";
+import { gracefulStopSupported, sessions } from "../store";
 import SessionCard from "../components/SessionCard.vue";
 import SessionTable from "../components/SessionTable.vue";
 import BatchConfirmDialog from "../components/BatchConfirmDialog.vue";
@@ -167,7 +167,7 @@ function clearFilters() {
         <span class="batch-spacer"></span>
         <button class="ghost-btn small" type="button" @click="selected = []">Clear</button>
         <button class="danger-btn small" type="button" :disabled="selected.length > 20" @click="batchOpen = true">
-          {{ isWindows ? 'Force stop selected' : 'Stop selected · SIGTERM' }}
+          {{ gracefulStopSupported ? 'Stop selected · SIGTERM' : 'Force stop selected' }}
         </button>
       </div>
 
