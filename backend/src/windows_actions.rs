@@ -298,8 +298,8 @@ pub fn terminate(
         targets: observed.len(),
         signaled,
         survivors,
-        unauthorized: unauthorized.len() as u32,
-        skipped: skipped.len() as u32,
+        unauthorized: unauthorized.len(),
+        skipped: skipped.len(),
         force_available: root_alive,
         details: serde_json::json!({"platform": "windows", "termination": "TerminateProcess", "graceful": false, "verified_targets": verified.len(), "verification_scope": "observed_descendants", "follow_up_scan": scan_confirmed, "tree_truncated": tree_truncated, "errors": errors}),
     })
