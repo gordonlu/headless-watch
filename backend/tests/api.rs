@@ -174,7 +174,7 @@ async fn validates_host_token_origin_and_content_type() {
     assert!(payload.get("health").is_some());
     assert!(payload.get("summary").is_some());
 
-    let (status, _, _) = send(
+    let (status, _, health) = send(
         &harness.app,
         request(
             Method::GET,
@@ -187,6 +187,10 @@ async fn validates_host_token_origin_and_content_type() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+    assert!(health
+        .get("monitor_pid")
+        .and_then(serde_json::Value::as_u64)
+        .is_some());
 
     let (status, _, _) = send(
         &harness.app,

@@ -256,6 +256,7 @@ async fn health(State(state): State<AppState>) -> Response {
         "status": health.status,
         "last_scan_age_s": health.last_scan_age_s,
         "active_sessions": health.active_sessions,
+        "monitor_pid": health.monitor_pid,
     }))
     .into_response()
 }
