@@ -355,11 +355,16 @@ def run(args) -> tuple[Path, dict]:
 
         def cdp_session():
             sample = own_session()
-            return sample if sample and sample.get("cdp", {}).get("tabs") else None
+            if not sample:
+                return None
+            tabs = sample.get("cdp", {}).get("tabs") or []
+            if any("Windows acceptance" in tab.get("title", "") for tab in tabs):
+                return sample
+            return None
 
         session = wait_for(cdp_session, "backend CDP tab discovery", args.timeout)
-        tab = next((t for t in session["cdp"]["tabs"] if "Windows acceptance" in t.get("title", "")), None)
-        require(tab, "Backend CDP did not discover the private acceptance page.")
+        report["cdp"] = session.get("cdp", {})
+        tab = next(t for t in session["cdp"]["tabs"] if "Windows acceptance" in t.get("title", ""))
         status, headers, image = http(base, "POST", f"/api/v1/sessions/{encoded_id}/screenshot", token, {"tab_id": tab["id"]})
         require(status == 200 and image.startswith(b"\xff\xd8\xff"), f"CDP screenshot did not return JPEG: HTTP {status}")
         (output / "cdp-screenshot.jpg").write_bytes(image)
